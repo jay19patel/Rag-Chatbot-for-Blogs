@@ -1,14 +1,13 @@
 from typing import List, Dict, Any, Optional
 from googlesearch import search
 from database import BlogDatabase
-from embeddings import EmbeddingSystem
 from blog_service import BlogService
 
 class BlogTools:
     def __init__(self, api_key: str):
         self.blog_service = BlogService(api_key)
         self.db = BlogDatabase()
-        self.embedding_system = EmbeddingSystem(api_key)
+        self.api_key = api_key
 
     def create_blog_tool(self, title: str, content: str, topic: str = "", tags: List[str] = None) -> Dict[str, Any]:
         try:
@@ -169,20 +168,32 @@ class BlogTools:
             return {"status": "error", "message": f"❌ Error: {str(e)}"}
 
     def get_search_stats_tool(self) -> Dict[str, Any]:
+        """Get comprehensive statistics using ChromaDB integration"""
         try:
-            blogs = self.db.get_all_blogs()
-            chunks = self.db.get_blog_chunks_with_embeddings()
+            # Get comprehensive stats from blog service
+            result = self.blog_service.get_database_stats()
             
-            return {
-                "status": "success",
-                "stats": {
-                    "total_blogs": len(blogs),
-                    "total_chunks": len(chunks),
-                    "latest_blog": blogs[-1]['created_at'] if blogs else None,
-                    "blog_topics": list(set([b['topic'] for b in blogs if b['topic']]))
-                },
-                "message": f"📊 {len(blogs)} blogs with {len(chunks)} chunks"
-            }
+            if result['success']:
+                stats = result['stats']
+                combined_stats = stats.get('combined_stats', {})
+                chromadb_stats = stats.get('chromadb_stats', {})
+                
+                return {
+                    "status": "success",
+                    "stats": {
+                        "total_blogs": combined_stats.get('total_blogs', 0),
+                        "chromadb_chunks": combined_stats.get('chromadb_chunks', 0),
+                        "sqlite_chunks": combined_stats.get('sqlite_chunks', 0),
+                        "topics": combined_stats.get('topics', []),
+                        "storage_health": combined_stats.get('storage_health', 'unknown'),
+                        "embedding_model": chromadb_stats.get('storage_info', {}).get('embedding_model', 'all-MiniLM-L6-v2'),
+                        "chroma_collection": chromadb_stats.get('storage_info', {}).get('collection_name', 'blog_embeddings')
+                    },
+                    "message": f"📊 {combined_stats.get('total_blogs', 0)} blogs with {combined_stats.get('chromadb_chunks', 0)} ChromaDB chunks",
+                    "storage_info": result.get('storage_info', {})
+                }
+            else:
+                return {"status": "error", "message": result.get('message', 'Unknown error')}
         except Exception as e:
             return {"status": "error", "message": f"❌ Error: {str(e)}"}
 

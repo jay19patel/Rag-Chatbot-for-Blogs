@@ -1,12 +1,16 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict, Any
 import os
 from contextlib import asynccontextmanager
+import asyncio
 
 from tools import BlogTools, create_tools_instance
 from langchain_mistralai.chat_models import ChatMistralAI
+from auth_system import auth_system
+from personal_context import personal_context
+from web_search_integration import web_search_creator
 
 API_KEY = os.getenv("MISTRAL_API_KEY", "yCVIzpE6wyS0uE6Y48ZFgErfPuv0rDfJ")
 
@@ -37,6 +41,22 @@ class ChatRequest(BaseModel):
 class BlogSearchRequest(BaseModel):
     query: str = Field(..., min_length=1)
 
+class WebBlogRequest(BaseModel):
+    topic: str = Field(..., min_length=1)
+    access_key: str = Field(..., min_length=1)
+    max_sources: int = Field(default=4, ge=1, le=8)
+
+class UpdateBlogRequest(BaseModel):
+    blog_id: int
+    access_key: str
+    title: Optional[str] = None
+    content: Optional[str] = None
+    topic: Optional[str] = None
+
+class DeleteBlogRequest(BaseModel):
+    blog_id: int
+    access_key: str
+
 async def get_blog_tools() -> BlogTools:
     if blog_tools is None:
         raise HTTPException(status_code=500, detail="System not initialized")
@@ -45,6 +65,16 @@ async def get_blog_tools() -> BlogTools:
 @app.post("/chat")
 async def chat(request: ChatRequest, tools: BlogTools = Depends(get_blog_tools)):
     try:
+        # Check for personal information queries first
+        if personal_context.is_personal_query(request.message):
+            personal_info = personal_context.get_personal_context(request.message)
+            if personal_info:
+                return {
+                    "response": f"👤 **Personal Information:**\n\n{personal_info}",
+                    "source": "personal_context",
+                    "action": "personal_info_provided"
+                }
+        
         message = request.message.lower().strip()
         
         # Check if user wants to create a blog
@@ -196,6 +226,169 @@ async def search_blogs(request: BlogSearchRequest, tools: BlogTools = Depends(ge
                 "total_found": 0,
                 "message": "No matching blogs found"
             }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.post("/create-web-blog")
+async def create_web_blog(request: WebBlogRequest, tools: BlogTools = Depends(get_blog_tools)):
+    """Create a blog using web search and research"""
+    try:
+        # Authenticate access key
+        auth_result = auth_system.validate_access_key(request.access_key, "create_blog")
+        if not auth_result["valid"]:
+            raise HTTPException(status_code=401, detail=auth_result["message"])
+        
+        print(f"🔍 Creating web-researched blog for topic: {request.topic}")
+        
+        # Use web search to create blog content
+        blog_result = await web_search_creator.create_blog_from_web_research(
+            topic=request.topic,
+            max_sources=request.max_sources
+        )
+        
+        if not blog_result.get("success"):
+            return {
+                "success": False,
+                "error": blog_result.get("error", "Web research failed"),
+                "topic": request.topic
+            }
+        
+        # Create blog in database
+        create_result = tools.create_blog_tool(
+            title=blog_result["title"],
+            content=blog_result["content"],
+            topic=request.topic
+        )
+        
+        if create_result["status"] == "success":
+            return {
+                "success": True,
+                "message": f"🌐 **Web-Researched Blog Created!**\n\n**Title:** {blog_result['title']}\n\n**Sources:** {blog_result['total_sources']} web sources\n**Quality:** {blog_result['research_quality']}\n**Blog ID:** {create_result['blog_id']}",
+                "blog_id": create_result["blog_id"],
+                "title": blog_result["title"],
+                "topic": request.topic,
+                "sources_used": blog_result["total_sources"],
+                "research_quality": blog_result["research_quality"],
+                "word_count": blog_result["estimated_word_count"],
+                "action": "web_blog_created"
+            }
+        else:
+            return {
+                "success": False,
+                "error": create_result["message"],
+                "blog_data": blog_result
+            }
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error creating web blog: {str(e)}")
+
+@app.put("/update-blog")
+async def update_blog(request: UpdateBlogRequest, tools: BlogTools = Depends(get_blog_tools)):
+    """Update an existing blog with authentication"""
+    try:
+        # Authenticate access key
+        auth_result = auth_system.validate_access_key(request.access_key, "update_blog")
+        if not auth_result["valid"]:
+            raise HTTPException(status_code=401, detail=auth_result["message"])
+        
+        # Update blog
+        update_data = {}
+        if request.title:
+            update_data["title"] = request.title
+        if request.content:
+            update_data["content"] = request.content
+        if request.topic:
+            update_data["topic"] = request.topic
+        
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No update data provided")
+        
+        # Use blog service to update
+        result = tools.blog_service.update_blog(request.blog_id, **update_data)
+        
+        if result["success"]:
+            return {
+                "success": True,
+                "message": f"✅ Blog {request.blog_id} updated successfully",
+                "blog_id": request.blog_id,
+                "updated_fields": list(update_data.keys()),
+                "action": "blog_updated"
+            }
+        else:
+            raise HTTPException(status_code=404, detail=result["message"])
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating blog: {str(e)}")
+
+@app.delete("/delete-blog")
+async def delete_blog(request: DeleteBlogRequest, tools: BlogTools = Depends(get_blog_tools)):
+    """Delete a blog with authentication"""
+    try:
+        # Authenticate access key
+        auth_result = auth_system.validate_access_key(request.access_key, "delete_blog")
+        if not auth_result["valid"]:
+            raise HTTPException(status_code=401, detail=auth_result["message"])
+        
+        # Delete blog
+        result = tools.blog_service.delete_blog(request.blog_id)
+        
+        if result["success"]:
+            return {
+                "success": True,
+                "message": f"🗑️ Blog {request.blog_id} deleted successfully",
+                "blog_id": request.blog_id,
+                "action": "blog_deleted"
+            }
+        else:
+            raise HTTPException(status_code=404, detail=result["message"])
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting blog: {str(e)}")
+
+@app.get("/auth-info/{access_key}")
+async def get_auth_info(access_key: str):
+    """Get information about access key permissions"""
+    try:
+        info = auth_system.get_access_key_info(access_key)
+        return info
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/system-stats")
+async def get_system_stats(access_key: str = Header(None), tools: BlogTools = Depends(get_blog_tools)):
+    """Get comprehensive system statistics"""
+    try:
+        # Optional authentication for detailed stats
+        detailed_access = False
+        if access_key:
+            auth_result = auth_system.validate_access_key(access_key, "admin_access")
+            detailed_access = auth_result.get("valid", False)
+        
+        # Get blog stats
+        blog_stats = tools.get_search_stats_tool()
+        
+        # Get auth stats if authorized
+        auth_stats = {}
+        if detailed_access:
+            auth_stats = auth_system.get_security_stats()
+        
+        return {
+            "success": True,
+            "blog_statistics": blog_stats,
+            "authentication_stats": auth_stats if detailed_access else {"message": "Provide access key for detailed auth stats"},
+            "system_info": {
+                "storage": "ChromaDB + SQLite",
+                "embedding_model": "all-MiniLM-L6-v2",
+                "features": ["RAG Search", "Web Research", "Personal Context", "Authentication"]
+            }
+        }
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 

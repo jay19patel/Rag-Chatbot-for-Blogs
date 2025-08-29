@@ -8,3 +8,5 @@ requests
 googlesearch-python
 python-dotenv
 httpx
+chromadb
+sentence-transformers

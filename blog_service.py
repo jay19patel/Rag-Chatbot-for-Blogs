@@ -1,5 +1,4 @@
 from database import BlogDatabase
-from embeddings import EmbeddingSystem
 from typing import List, Dict, Any, Optional
 import requests
 from googlesearch import search
@@ -9,35 +8,36 @@ import aiohttp
 class BlogService:
     def __init__(self, api_key: str):
         self.db = BlogDatabase()
-        self.embedding_system = EmbeddingSystem(api_key)
         self.api_key = api_key
     
     def create_blog(self, title: str, content: str, topic: str = "") -> Dict[str, Any]:
-        """Create a new blog with embeddings"""
+        """Create a new blog with ChromaDB integration"""
         try:
-            # Create embedding for the full content
-            content_embedding = self.embedding_system.create_embedding(content)
-            
-            # Save blog to database
+            # Save blog to SQLite database (basic info)
             blog_id = self.db.save_blog(
                 title=title,
                 content=content,
-                topic=topic,
-                embedding=content_embedding
+                topic=topic
             )
             
-            # Create chunks and their embeddings
-            chunks = self.embedding_system.chunk_text(content)
-            chunk_data = []
+            # Add blog content to ChromaDB with automatic chunking and embeddings
+            chunks_created = self.db.chroma_manager.add_blog_chunks(
+                blog_id=blog_id,
+                blog_title=title,
+                blog_content=content,
+                topic=topic
+            )
             
+            # Create chunks for backward compatibility with SQLite
+            chunk_data = []
+            chunks = self.db.chroma_manager._chunk_text(content)
             for chunk in chunks:
-                chunk_embedding = self.embedding_system.create_embedding(chunk)
                 chunk_data.append({
                     'text': chunk,
-                    'embedding': chunk_embedding
+                    'embedding': None  # ChromaDB handles embeddings
                 })
             
-            # Save chunks to database
+            # Save empty chunks to SQLite for compatibility
             self.db.save_blog_chunks(blog_id, chunk_data)
             
             return {
@@ -45,7 +45,8 @@ class BlogService:
                 'blog_id': blog_id,
                 'title': title,
                 'content': content,
-                'chunks_created': len(chunk_data)
+                'chunks_created': chunks_created,
+                'storage': 'chromadb_optimized'
             }
             
         except Exception as e:
@@ -54,48 +55,61 @@ class BlogService:
                 'error': str(e)
             }
     
-    def search_blogs_rag(self, query: str, top_k: int = 3) -> Dict[str, Any]:
-        """Search blogs using RAG (Retrieval Augmented Generation)"""
+    def search_blogs_rag(self, query: str, top_k: int = 5) -> Dict[str, Any]:
+        """Search blogs using ChromaDB RAG with advanced similarity search"""
         try:
-            # Create embedding for the query
-            query_embedding = self.embedding_system.create_embedding(query)
+            # Use ChromaDB for advanced semantic search
+            similar_chunks = self.db.chroma_manager.search_similar_content(
+                query=query,
+                top_k=top_k
+            )
             
-            # Get all blog chunks with embeddings
-            chunk_data = self.db.get_blog_chunks_with_embeddings()
-            
-            if not chunk_data:
+            if not similar_chunks:
                 return {
                     'found_in_blogs': False,
                     'message': "No blogs found in database",
                     'chunks': []
                 }
             
-            # Find similar chunks
-            similar_chunks = self.embedding_system.find_similar_chunks(
-                query_embedding, chunk_data, top_k
-            )
-            
-            # Filter chunks with good similarity (threshold)
-            relevant_chunks = [chunk for chunk in similar_chunks if chunk['similarity'] > 0.3]
+            # Filter chunks with good similarity (ChromaDB threshold)
+            relevant_chunks = [chunk for chunk in similar_chunks if chunk['similarity'] > 0.4]
             
             if relevant_chunks:
                 return {
                     'found_in_blogs': True,
                     'chunks': relevant_chunks,
-                    'source': 'blog_database'
+                    'source': 'chromadb_rag',
+                    'search_method': 'semantic_similarity',
+                    'total_found': len(relevant_chunks),
+                    'similarity_threshold': 0.4
                 }
             else:
-                return {
-                    'found_in_blogs': False,
-                    'message': "No relevant content found in blogs",
-                    'chunks': []
-                }
+                # Return lower threshold results if no high-similarity matches
+                lower_threshold_chunks = [chunk for chunk in similar_chunks if chunk['similarity'] > 0.25]
+                if lower_threshold_chunks:
+                    return {
+                        'found_in_blogs': True,
+                        'chunks': lower_threshold_chunks,
+                        'source': 'chromadb_rag',
+                        'search_method': 'broad_semantic_search',
+                        'total_found': len(lower_threshold_chunks),
+                        'similarity_threshold': 0.25,
+                        'note': 'Lower confidence matches'
+                    }
+                else:
+                    return {
+                        'found_in_blogs': False,
+                        'message': "No relevant content found in blogs",
+                        'chunks': [],
+                        'searched_query': query
+                    }
                 
         except Exception as e:
             return {
                 'found_in_blogs': False,
                 'error': str(e),
-                'chunks': []
+                'chunks': [],
+                'message': f"Error during ChromaDB search: {str(e)}"
             }
     
     def google_search_fallback(self, query: str, num_results: int = 5) -> Dict[str, Any]:
@@ -228,13 +242,21 @@ class BlogService:
             }
     
     def get_database_stats(self) -> Dict[str, Any]:
-        """Get database statistics"""
+        """Get comprehensive database statistics from both SQLite and ChromaDB"""
         try:
             stats = self.db.get_database_stats()
+            combined_stats = stats.get('combined_stats', {})
+            
             return {
                 'success': True,
                 'stats': stats,
-                'message': f"📊 Database contains {stats['total_blogs']} blogs with {stats['total_chunks']} chunks"
+                'message': f"📊 Database contains {combined_stats.get('total_blogs', 0)} blogs with {combined_stats.get('chromadb_chunks', 0)} ChromaDB chunks",
+                'storage_info': {
+                    'primary_storage': 'ChromaDB',
+                    'backup_storage': 'SQLite',
+                    'embedding_model': 'all-MiniLM-L6-v2',
+                    'health_status': combined_stats.get('storage_health', 'unknown')
+                }
             }
         except Exception as e:
             return {

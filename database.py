@@ -3,10 +3,12 @@ import json
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 import numpy as np
+from chromadb_integration import ChromaDBManager
 
 class BlogDatabase:
-    def __init__(self, db_path: str = "blogs.db"):
+    def __init__(self, db_path: str = "blogs.db", chroma_db_path: str = "./chroma_db"):
         self.db_path = db_path
+        self.chroma_manager = ChromaDBManager(persist_directory=chroma_db_path)
         self.init_database()
     
     def init_database(self):
@@ -60,6 +62,8 @@ class BlogDatabase:
         return blog_id
     
     def save_blog_chunks(self, blog_id: int, chunks: List[Dict[str, Any]]):
+        """Save chunks to both SQLite and ChromaDB for backward compatibility"""
+        # Save to SQLite (for backward compatibility)
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -95,15 +99,18 @@ class BlogDatabase:
         return blogs
     
     def delete_blog(self, blog_id: int) -> bool:
-        """Delete a blog and its chunks"""
+        """Delete a blog and its chunks from both SQLite and ChromaDB"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         try:
-            # Delete blog chunks first (foreign key constraint)
+            # Delete from ChromaDB first
+            self.chroma_manager.delete_blog(blog_id)
+            
+            # Delete blog chunks from SQLite (foreign key constraint)
             cursor.execute('DELETE FROM blog_chunks WHERE blog_id = ?', (blog_id,))
             
-            # Delete the blog
+            # Delete the blog from SQLite
             cursor.execute('DELETE FROM blogs WHERE id = ?', (blog_id,))
             
             deleted = cursor.rowcount > 0
@@ -118,7 +125,7 @@ class BlogDatabase:
     
     def update_blog(self, blog_id: int, title: str = None, content: str = None, 
                    topic: str = None, tags: List[str] = None) -> bool:
-        """Update an existing blog"""
+        """Update an existing blog in both SQLite and ChromaDB"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -148,6 +155,22 @@ class BlogDatabase:
                 cursor.execute(query, params)
                 
                 updated = cursor.rowcount > 0
+                
+                # If content was updated, update ChromaDB as well
+                if updated and content is not None:
+                    # Get updated blog info
+                    cursor.execute('SELECT title, topic FROM blogs WHERE id = ?', (blog_id,))
+                    blog_data = cursor.fetchone()
+                    if blog_data:
+                        # Delete old chunks from ChromaDB and add new ones
+                        self.chroma_manager.delete_blog(blog_id)
+                        self.chroma_manager.add_blog_chunks(
+                            blog_id=blog_id,
+                            blog_title=blog_data[0],
+                            blog_content=content,
+                            topic=blog_data[1] or ""
+                        )
+                
                 conn.commit()
                 conn.close()
                 return updated
@@ -207,17 +230,17 @@ class BlogDatabase:
         return blogs
     
     def get_database_stats(self) -> Dict[str, Any]:
-        """Get database statistics"""
+        """Get comprehensive database statistics from both SQLite and ChromaDB"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Get blog count
+        # Get blog count from SQLite
         cursor.execute('SELECT COUNT(*) FROM blogs')
         blog_count = cursor.fetchone()[0]
         
-        # Get chunk count
+        # Get chunk count from SQLite
         cursor.execute('SELECT COUNT(*) FROM blog_chunks')
-        chunk_count = cursor.fetchone()[0]
+        sqlite_chunk_count = cursor.fetchone()[0]
         
         # Get latest blog
         cursor.execute('SELECT title, created_at FROM blogs ORDER BY created_at DESC LIMIT 1')
@@ -229,12 +252,25 @@ class BlogDatabase:
         
         conn.close()
         
+        # Get ChromaDB statistics
+        chroma_stats = self.chroma_manager.get_blog_statistics()
+        
         return {
-            'total_blogs': blog_count,
-            'total_chunks': chunk_count,
-            'latest_blog': {'title': latest_blog[0], 'created_at': latest_blog[1]} if latest_blog else None,
-            'unique_topics': topics,
-            'topics_count': len(topics)
+            'sqlite_stats': {
+                'total_blogs': blog_count,
+                'total_chunks': sqlite_chunk_count,
+                'latest_blog': {'title': latest_blog[0], 'created_at': latest_blog[1]} if latest_blog else None,
+                'unique_topics': topics,
+                'topics_count': len(topics)
+            },
+            'chromadb_stats': chroma_stats,
+            'combined_stats': {
+                'total_blogs': blog_count,
+                'sqlite_chunks': sqlite_chunk_count,
+                'chromadb_chunks': chroma_stats.get('total_chunks', 0),
+                'topics': topics,
+                'storage_health': 'healthy' if blog_count > 0 else 'empty'
+            }
         }
     
     def get_blog_chunks_with_embeddings(self) -> List[Dict[str, Any]]:
@@ -290,15 +326,18 @@ class BlogDatabase:
         return blogs
     
     def delete_blog(self, blog_id: int) -> bool:
-        """Delete a blog and its chunks"""
+        """Delete a blog and its chunks from both SQLite and ChromaDB"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         try:
-            # Delete blog chunks first (foreign key constraint)
+            # Delete from ChromaDB first
+            self.chroma_manager.delete_blog(blog_id)
+            
+            # Delete blog chunks from SQLite (foreign key constraint)
             cursor.execute('DELETE FROM blog_chunks WHERE blog_id = ?', (blog_id,))
             
-            # Delete the blog
+            # Delete the blog from SQLite
             cursor.execute('DELETE FROM blogs WHERE id = ?', (blog_id,))
             
             deleted = cursor.rowcount > 0
@@ -313,7 +352,7 @@ class BlogDatabase:
     
     def update_blog(self, blog_id: int, title: str = None, content: str = None, 
                    topic: str = None, tags: List[str] = None) -> bool:
-        """Update an existing blog"""
+        """Update an existing blog in both SQLite and ChromaDB"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
@@ -343,6 +382,22 @@ class BlogDatabase:
                 cursor.execute(query, params)
                 
                 updated = cursor.rowcount > 0
+                
+                # If content was updated, update ChromaDB as well
+                if updated and content is not None:
+                    # Get updated blog info
+                    cursor.execute('SELECT title, topic FROM blogs WHERE id = ?', (blog_id,))
+                    blog_data = cursor.fetchone()
+                    if blog_data:
+                        # Delete old chunks from ChromaDB and add new ones
+                        self.chroma_manager.delete_blog(blog_id)
+                        self.chroma_manager.add_blog_chunks(
+                            blog_id=blog_id,
+                            blog_title=blog_data[0],
+                            blog_content=content,
+                            topic=blog_data[1] or ""
+                        )
+                
                 conn.commit()
                 conn.close()
                 return updated
@@ -402,17 +457,17 @@ class BlogDatabase:
         return blogs
     
     def get_database_stats(self) -> Dict[str, Any]:
-        """Get database statistics"""
+        """Get comprehensive database statistics from both SQLite and ChromaDB"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        # Get blog count
+        # Get blog count from SQLite
         cursor.execute('SELECT COUNT(*) FROM blogs')
         blog_count = cursor.fetchone()[0]
         
-        # Get chunk count
+        # Get chunk count from SQLite
         cursor.execute('SELECT COUNT(*) FROM blog_chunks')
-        chunk_count = cursor.fetchone()[0]
+        sqlite_chunk_count = cursor.fetchone()[0]
         
         # Get latest blog
         cursor.execute('SELECT title, created_at FROM blogs ORDER BY created_at DESC LIMIT 1')
@@ -424,10 +479,23 @@ class BlogDatabase:
         
         conn.close()
         
+        # Get ChromaDB statistics
+        chroma_stats = self.chroma_manager.get_blog_statistics()
+        
         return {
-            'total_blogs': blog_count,
-            'total_chunks': chunk_count,
-            'latest_blog': {'title': latest_blog[0], 'created_at': latest_blog[1]} if latest_blog else None,
-            'unique_topics': topics,
-            'topics_count': len(topics)
+            'sqlite_stats': {
+                'total_blogs': blog_count,
+                'total_chunks': sqlite_chunk_count,
+                'latest_blog': {'title': latest_blog[0], 'created_at': latest_blog[1]} if latest_blog else None,
+                'unique_topics': topics,
+                'topics_count': len(topics)
+            },
+            'chromadb_stats': chroma_stats,
+            'combined_stats': {
+                'total_blogs': blog_count,
+                'sqlite_chunks': sqlite_chunk_count,
+                'chromadb_chunks': chroma_stats.get('total_chunks', 0),
+                'topics': topics,
+                'storage_health': 'healthy' if blog_count > 0 else 'empty'
+            }
         }
