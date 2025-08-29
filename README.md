@@ -1,95 +1,129 @@
-# Simple AI Chatbot with Node-Based Blog System
+# 🧠 RAG Blog System
 
-A clean, minimalistic chatbot that automatically handles conversations, blog creation, and authentication using a smart node-based architecture.
+Simple RAG-powered blog system with chat interface, embedding search, and SQLite storage.
 
 ## 🚀 Quick Start
 
 ```bash
-pip install langchain-mistralai
-python app.py
+# 1. Activate environment
+source venv/bin/activate
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Test system
+python test_system.py
+
+# 4. Start server
+uvicorn main:app --reload
 ```
+
+## 🛠 API Endpoints (Only 4 endpoints)
+
+### 1. `/chat` (POST) - Main Chat Interface
+**Everything happens through chat!**
+
+```bash
+curl -X POST "http://localhost:8000/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What is Python programming?"}'
+```
+
+**Chat Commands:**
+- `"create blog about Python"` - Creates blog with AI
+- `"list blogs"` - Shows all blogs
+- `"What is machine learning?"` - RAG search + answer
+- Regular questions get RAG responses
+
+### 2. `/blogs` (GET) - List All Blogs
+```bash
+curl "http://localhost:8000/blogs"
+```
+
+### 3. `/blogs/{id}` (GET) - Get Blog Details
+```bash
+curl "http://localhost:8000/blogs/1"
+```
+
+### 4. `/blog-search` (POST) - Search with Embeddings
+```bash
+curl -X POST "http://localhost:8000/blog-search" \
+  -H "Content-Type: application/json" \
+  -d '{"query": "machine learning"}'
+```
+
+Returns blog IDs, similarity scores, and text snippets.
 
 ## 💬 How It Works
 
-Just chat naturally! The system intelligently routes to the right nodes:
+1. **Chat Interface**: Send any message to `/chat`
+2. **Smart Routing**: System detects intent (create blog, search, question)
+3. **RAG Search**: Uses embeddings to find relevant blog content
+4. **AI Response**: Combines retrieved context with AI generation
+5. **Google Fallback**: If not found in blogs, suggests creating new blog
 
-### Example Conversations:
+## 📋 Example Usage
 
-**General Chat:**
-```
-You: Hey, how are you?
-AI: Hello! I'm doing great, thanks for asking! How can I help you today?
-```
-
-**Explain + Auto Blog Offer:**
-```
-You: explain python and what is its use
-AI: Python is a versatile programming language...
-
-💡 Would you like me to create a blog about this topic?
+### Create Blog via Chat
+```json
+{
+  "message": "create blog about artificial intelligence"
+}
 ```
 
-**Create Blog:**
-```
-You: now i need to create blog for this topic
-AI: 📝 Blog Created!
+Response includes blog ID and confirmation.
 
-Title: "Python Programming: A Complete Guide"
-Content: [Full blog content...]
-
-Say 'save this' to save the blog!
+### Ask Questions (RAG)
+```json
+{
+  "message": "What are the benefits of Python?"
+}
 ```
 
-**Save Blog (Authentication Required):**
+Gets answer from your blogs if available, otherwise general response.
+
+### List Blogs via Chat
+```json
+{
+  "message": "list my blogs"
+}
 ```
-You: now save this  
-AI: 🔒 Permission denied! You need authentication to save blogs. Share your access key.
 
-You: my access key is 123
-AI: ✅ Authentication successful! Blog saved successfully!
+### Search Blogs with Embeddings
+```json
+{
+  "query": "machine learning algorithms"
+}
 ```
 
-## 🏗️ Architecture
+Returns matching blog IDs with similarity scores.
 
-### Files:
-- **`app.py`** - Main orchestrator with smart routing
-- **`simple_nodes.py`** - Individual node functions
-- **`schema.py`** - Data structures  
-- **`blogs.json`** - Auto-created blog storage
+## 🔧 System Features
 
-### Nodes:
-- **`general_chat_node`** - AI conversation
-- **`create_blog_node`** - Auto blog generation
-- **`save_blog_node`** - Blog persistence  
-- **`authentication_node`** - Access control
-- **`blog_query_node`** - Search existing blogs
+- **📚 Automatic Indexing**: Blogs are chunked and embedded
+- **🔍 Semantic Search**: Vector similarity matching
+- **💬 Natural Chat**: No commands, just natural language
+- **🌐 Smart Fallback**: Google search when content not found
+- **📊 SQLite Storage**: Efficient local database
+- **⚡ FastAPI**: Production-ready with auto docs at `/docs`
 
-### Smart Router:
-- No if/else chains - pure node-based routing
-- Contextual keyword detection
-- State management across nodes
-- Automatic topic extraction
+## 📁 Files Structure
 
-## 🔧 Customization
+```
+ai-chatbot/
+├── main.py           # FastAPI app (4 endpoints only)
+├── tools.py          # Blog management utilities
+├── database.py       # SQLite operations
+├── embeddings.py     # Mistral embeddings
+├── blog_service.py   # Core RAG logic
+└── test_system.py    # System tests
+```
 
-### Add New Node:
-1. Create function in `simple_nodes.py`
-2. Add routing logic in `smart_router()`
-3. Done! No complex configuration needed.
+## 🎯 Key Benefits
 
-### Modify Authentication:
-Change access key in `authentication_node()` function.
+- **Simple**: Only 4 endpoints needed
+- **Smart**: Chat handles everything via natural language  
+- **Fast**: Embedding-based search with similarity scores
+- **Complete**: Blog creation, search, and retrieval in one system
 
-### Extend Functionality:
-Each node is independent - modify or add features without affecting others.
-
-## 🎯 Features
-
-- **Natural Conversations** - No commands, just chat
-- **Auto Blog Creation** - Intelligent topic extraction  
-- **Smart Authentication** - Seamless access control
-- **Persistent Storage** - JSON-based blog database
-- **Modular Design** - Easy to extend and customize
-- **No Dependencies** - Minimal requirements
-
-The system automatically detects intent and routes to appropriate nodes without any complex configuration!
+Access at: http://localhost:8000/docs for interactive API documentation.
