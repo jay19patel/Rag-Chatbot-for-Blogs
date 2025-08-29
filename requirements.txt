@@ -1,8 +1,6 @@
 fastapi
 uvicorn[standard]
-python-multipart
 langchain-mistralai
-numpy
 pydantic
 requests
 googlesearch-python
@@ -10,3 +8,5 @@ python-dotenv
 httpx
 chromadb
 sentence-transformers
+aiohttp
+beautifulsoup4
