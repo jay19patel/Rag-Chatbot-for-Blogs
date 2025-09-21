@@ -106,7 +106,6 @@ class Blog(BaseModel):
     """
     Represents a single blog post with metadata and content.
     """
-    id: int
     slug: str
     title: str
     subtitle: Optional[str] = None
