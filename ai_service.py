@@ -4,12 +4,8 @@ from langchain.prompts import PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
 
 from schema import Blog
-from dotenv import load_dotenv
-load_dotenv()
-import os
+import config
 import json
-
-mistral_api_key = os.getenv("MISTRAL_API_KEY")
 
 parser = PydanticOutputParser(pydantic_object=Blog)
 
@@ -70,7 +66,8 @@ prompt = PromptTemplate(
 
 llm = ChatMistralAI(
     model="mistral-large-latest",
-    temperature=0.7,
+    api_key=config.settings.MISTRAL_API_KEY,
+    temperature=config.settings.TEMPERATURE,
     max_retries=2
 )
 
