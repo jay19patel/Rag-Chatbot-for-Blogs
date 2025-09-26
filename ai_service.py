@@ -2,10 +2,29 @@
 from langchain_mistralai import ChatMistralAI
 from langchain.prompts import PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.memory import ConversationBufferMemory
+from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_core.runnables.history import RunnableWithMessageHistory
 
 from schema import Blog
 import config
 import json
+from typing import Dict
+
+# In-memory blog storage using LangChain memory
+blog_storage: Dict[str, Blog] = {}
+
+# LangChain memory for conversation history
+memory = ConversationBufferMemory(
+    memory_key="chat_history",
+    return_messages=True,
+    output_key="output"
+)
+
+# Session store for message history
+session_store = {}
 
 parser = PydanticOutputParser(pydantic_object=Blog)
 
@@ -71,14 +90,105 @@ llm = ChatMistralAI(
     max_retries=2
 )
 
+# Function to get session history
+def get_session_history(session_id: str) -> ChatMessageHistory:
+    if session_id not in session_store:
+        session_store[session_id] = ChatMessageHistory()
+    return session_store[session_id]
+
+# Agent prompt template with memory
+agent_prompt = ChatPromptTemplate.from_messages([
+    ("system", """You are a helpful AI assistant that manages blog operations and remembers our conversation history.
+
+    You have access to the following blog management tools:
+    - list_blogs: List all stored blogs
+    - create_new_blog: Generate and store a new blog based on a topic
+    - update_existing_blog: Update an existing blog with new content
+    - show_blog_details: Show detailed information about a specific blog
+    - save_blog_to_file: Save a blog to a JSON file
+
+    You remember our previous conversations and can reference:
+    - Previously created blogs and their IDs
+    - User preferences and topics discussed
+    - Previous requests and their outcomes
+
+    When users ask you to perform blog operations, use the appropriate tools.
+
+    Examples:
+    - "list all blogs" → use list_blogs tool
+    - "create a blog about AI" → use create_new_blog tool with topic "AI"
+    - "update blog abc123 with topic machine learning" → use update_existing_blog tool
+    - "show details of blog xyz789" → use show_blog_details tool
+    - "save blog def456 to file" → use save_blog_to_file tool
+    - "update my last blog" → reference previous conversation to get blog ID
+
+    Always be helpful and provide clear feedback to the user. Use the conversation history to provide context-aware responses."""),
+    ("placeholder", "{chat_history}"),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}"),
+])
+
+# Create agent with memory
+def create_blog_agent():
+    from tools import available_tools
+
+    agent = create_tool_calling_agent(llm, available_tools, agent_prompt)
+    agent_executor = AgentExecutor(
+        agent=agent,
+        tools=available_tools,
+        verbose=True,
+        memory=memory,
+        handle_parsing_errors=True
+    )
+
+    # Wrap with message history
+    agent_with_chat_history = RunnableWithMessageHistory(
+        agent_executor,
+        get_session_history,
+        input_messages_key="input",
+        history_messages_key="chat_history",
+    )
+
+    return agent_with_chat_history
+
 def generate_blog(user_prompt):
     chain = prompt | llm | parser
     result = chain.invoke({"text": user_prompt})
     return result
 
+def store_blog(blog_data):
+    """Store blog in memory and return the blog_id"""
+    blog_storage[blog_data.blog_id] = blog_data
+    return blog_data.blog_id
+
+def get_blog(blog_id):
+    """Retrieve blog from memory by blog_id"""
+    return blog_storage.get(blog_id)
+
+def update_blog(blog_id, updated_data):
+    """Update existing blog and increment version"""
+    if blog_id in blog_storage:
+        existing_blog = blog_storage[blog_id]
+        existing_blog.blog_version += 1
+
+        # Update the blog with new data while keeping the same blog_id and incrementing version
+        updated_blog_dict = updated_data.model_dump()
+        updated_blog_dict['blog_id'] = blog_id
+        updated_blog_dict['blog_version'] = existing_blog.blog_version
+
+        updated_blog = Blog(**updated_blog_dict)
+        blog_storage[blog_id] = updated_blog
+        return updated_blog
+    return None
+
+def list_all_blogs():
+    """List all stored blogs with their IDs and versions"""
+    return {blog_id: {"title": blog.title, "version": blog.blog_version, "slug": blog.slug}
+            for blog_id, blog in blog_storage.items()}
+
 def save_blog_to_json(blog_data, filename=None):
     if filename is None:
-        filename = f"blog_{blog_data.slug}.json"
+        filename = f"blog_{blog_data.slug}_v{blog_data.blog_version}.json"
 
     # Use mode='json' to serialize HttpUrl and other custom types properly
     blog_dict = blog_data.model_dump(mode='json')
@@ -88,21 +198,54 @@ def save_blog_to_json(blog_data, filename=None):
 
     return filename
 
+
+def print_menu():
+    print("\n" + "="*50)
+    print("🚀 AI Blog Generator - LangChain Agent")
+    print("="*50)
+    print("Commands:")
+    print("Just type naturally! Examples:")
+    print("- 'list all blogs' or 'show me all blogs'")
+    print("- 'create a blog about artificial intelligence'")
+    print("- 'update blog abc123 with topic machine learning'")
+    print("- 'show details of blog xyz789'")
+    print("- 'save blog def456 to file'")
+    print("- 'exit' - Exit the program")
+    print("="*50)
+
 def main():
-    user_input = input("Enter your blog topic/prompt: ")
+    print_menu()
 
-    print("Generating blog...")
-    try:
-        blog = generate_blog(user_input)
-        print("Blog generated successfully!")
-        print("\nGenerated Blog JSON:")
-        print(json.dumps(blog.model_dump(mode='json'), indent=2))
+    # Initialize the agent with memory
+    agent_with_memory = create_blog_agent()
+    session_id = "default_session"  # You can make this dynamic for multiple users
 
-        filename = save_blog_to_json(blog)
-        print(f"\nBlog saved to: {filename}")
+    print("🧠 Memory enabled! I'll remember our conversation and previous blog operations.")
 
-    except Exception as e:
-        print(f"Error generating blog: {e}")
+    while True:
+        try:
+            user_input = input("\n💬 Enter your request: ").strip()
+
+            if user_input.lower() == 'exit':
+                print("👋 Goodbye! All blogs and conversation history are stored in memory until you restart.")
+                break
+
+            # Use the agent with memory to process natural language input
+            try:
+                response = agent_with_memory.invoke(
+                    {"input": user_input},
+                    config={"configurable": {"session_id": session_id}}
+                )
+                print("\n" + response["output"])
+            except Exception as e:
+                print(f"❌ Error processing request: {e}")
+                print("💡 Try rephrasing your request or use simpler commands.")
+
+        except KeyboardInterrupt:
+            print("\n👋 Goodbye!")
+            break
+        except Exception as e:
+            print(f"❌ Error: {e}")
 
 if __name__ == "__main__":
     main()

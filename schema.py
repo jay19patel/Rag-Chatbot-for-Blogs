@@ -1,6 +1,7 @@
 from typing import List, Optional, Literal
 from pydantic import BaseModel, HttpUrl
 from datetime import date
+import uuid
 
 class Link(BaseModel):
     """
@@ -106,6 +107,8 @@ class Blog(BaseModel):
     """
     Represents a single blog post with metadata and content.
     """
+    blog_id: str = None
+    blog_version: int = 1
     slug: str
     title: str
     subtitle: Optional[str] = None
@@ -118,5 +121,10 @@ class Blog(BaseModel):
     category: str
     views: int
     likes: int
+
+    def __init__(self, **data):
+        if 'blog_id' not in data or data['blog_id'] is None:
+            data['blog_id'] = str(uuid.uuid4())
+        super().__init__(**data)
 
 
