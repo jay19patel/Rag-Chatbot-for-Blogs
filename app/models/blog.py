@@ -126,5 +126,3 @@ class Blog(BaseModel):
         if 'blog_id' not in data or data['blog_id'] is None:
             data['blog_id'] = str(uuid.uuid4())
         super().__init__(**data)
-
-

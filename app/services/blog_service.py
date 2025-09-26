@@ -1,4 +1,3 @@
-
 from langchain_mistralai import ChatMistralAI
 from langchain.prompts import PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
@@ -8,12 +7,12 @@ from langchain.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
-from schema import Blog
-import config
+from app.models.blog import Blog
+from app.core.config import settings
 import json
 from typing import Dict
 
-# In-memory blog storage using LangChain memory
+# In-memory blog storage
 blog_storage: Dict[str, Blog] = {}
 
 # LangChain memory for conversation history
@@ -85,8 +84,8 @@ prompt = PromptTemplate(
 
 llm = ChatMistralAI(
     model="mistral-large-latest",
-    api_key=config.settings.MISTRAL_API_KEY,
-    temperature=config.settings.TEMPERATURE,
+    api_key=settings.MISTRAL_API_KEY,
+    temperature=settings.TEMPERATURE,
     max_retries=2
 )
 
@@ -127,29 +126,6 @@ agent_prompt = ChatPromptTemplate.from_messages([
     ("human", "{input}"),
     ("placeholder", "{agent_scratchpad}"),
 ])
-
-# Create agent with memory
-def create_blog_agent():
-    from tools import available_tools
-
-    agent = create_tool_calling_agent(llm, available_tools, agent_prompt)
-    agent_executor = AgentExecutor(
-        agent=agent,
-        tools=available_tools,
-        verbose=True,
-        memory=memory,
-        handle_parsing_errors=True
-    )
-
-    # Wrap with message history
-    agent_with_chat_history = RunnableWithMessageHistory(
-        agent_executor,
-        get_session_history,
-        input_messages_key="input",
-        history_messages_key="chat_history",
-    )
-
-    return agent_with_chat_history
 
 def generate_blog(user_prompt):
     chain = prompt | llm | parser
@@ -198,54 +174,25 @@ def save_blog_to_json(blog_data, filename=None):
 
     return filename
 
+# Create agent with memory
+def create_blog_agent():
+    from app.utils.tools import available_tools
 
-def print_menu():
-    print("\n" + "="*50)
-    print("🚀 AI Blog Generator - LangChain Agent")
-    print("="*50)
-    print("Commands:")
-    print("Just type naturally! Examples:")
-    print("- 'list all blogs' or 'show me all blogs'")
-    print("- 'create a blog about artificial intelligence'")
-    print("- 'update blog abc123 with topic machine learning'")
-    print("- 'show details of blog xyz789'")
-    print("- 'save blog def456 to file'")
-    print("- 'exit' - Exit the program")
-    print("="*50)
+    agent = create_tool_calling_agent(llm, available_tools, agent_prompt)
+    agent_executor = AgentExecutor(
+        agent=agent,
+        tools=available_tools,
+        verbose=True,
+        memory=memory,
+        handle_parsing_errors=True
+    )
 
-def main():
-    print_menu()
+    # Wrap with message history
+    agent_with_chat_history = RunnableWithMessageHistory(
+        agent_executor,
+        get_session_history,
+        input_messages_key="input",
+        history_messages_key="chat_history",
+    )
 
-    # Initialize the agent with memory
-    agent_with_memory = create_blog_agent()
-    session_id = "default_session"  # You can make this dynamic for multiple users
-
-    print("🧠 Memory enabled! I'll remember our conversation and previous blog operations.")
-
-    while True:
-        try:
-            user_input = input("\n💬 Enter your request: ").strip()
-
-            if user_input.lower() == 'exit':
-                print("👋 Goodbye! All blogs and conversation history are stored in memory until you restart.")
-                break
-
-            # Use the agent with memory to process natural language input
-            try:
-                response = agent_with_memory.invoke(
-                    {"input": user_input},
-                    config={"configurable": {"session_id": session_id}}
-                )
-                print("\n" + response["output"])
-            except Exception as e:
-                print(f"❌ Error processing request: {e}")
-                print("💡 Try rephrasing your request or use simpler commands.")
-
-        except KeyboardInterrupt:
-            print("\n👋 Goodbye!")
-            break
-        except Exception as e:
-            print(f"❌ Error: {e}")
-
-if __name__ == "__main__":
-    main()
+    return agent_with_chat_history

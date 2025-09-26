@@ -3,7 +3,7 @@ from langchain.tools import tool
 @tool
 def list_blogs() -> str:
     """List all stored blogs with their IDs, versions, and titles."""
-    from ai_service import list_all_blogs
+    from app.services.blog_service import list_all_blogs
 
     blogs = list_all_blogs()
     if blogs:
@@ -17,7 +17,7 @@ def list_blogs() -> str:
 @tool
 def create_new_blog(topic: str) -> str:
     """Generate and store a new blog based on the given topic."""
-    from ai_service import generate_blog, store_blog
+    from app.services.blog_service import generate_blog, store_blog
 
     if not topic.strip():
         return "❌ Please provide a topic for the blog"
@@ -33,7 +33,7 @@ def create_new_blog(topic: str) -> str:
 @tool
 def update_existing_blog(blog_id: str, new_topic: str) -> str:
     """Update an existing blog with a new topic."""
-    from ai_service import get_blog, generate_blog, update_blog
+    from app.services.blog_service import get_blog, generate_blog, update_blog
 
     if not blog_id.strip() or not new_topic.strip():
         return "❌ Please provide both blog_id and new_topic"
@@ -56,7 +56,7 @@ def update_existing_blog(blog_id: str, new_topic: str) -> str:
 @tool
 def show_blog_details(blog_id: str) -> str:
     """Show detailed information about a specific blog."""
-    from ai_service import get_blog
+    from app.services.blog_service import get_blog
 
     if not blog_id.strip():
         return "❌ Please provide a blog_id"
@@ -82,7 +82,7 @@ def show_blog_details(blog_id: str) -> str:
 @tool
 def save_blog_to_file(blog_id: str) -> str:
     """Save a blog to a JSON file."""
-    from ai_service import get_blog, save_blog_to_json
+    from app.services.blog_service import get_blog, save_blog_to_json
 
     if not blog_id.strip():
         return "❌ Please provide a blog_id"
