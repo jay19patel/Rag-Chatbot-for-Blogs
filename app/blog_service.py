@@ -9,6 +9,14 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 
 from app.blog_schema import Blog
 from app.config import settings
+from app.db_storage import (
+    store_blog_with_embedding,
+    update_blog_with_embedding,
+    search_blogs,
+    get_blog_by_id,
+    list_all_stored_blogs,
+    migrate_memory_to_mongodb
+)
 import json
 from typing import Dict
 
@@ -133,8 +141,17 @@ def generate_blog(user_prompt):
     return result
 
 def store_blog(blog_data):
-    """Store blog in memory and return the blog_id"""
+    """Store blog in memory and MongoDB with embeddings, return the blog_id"""
+    # Store in memory for backward compatibility
     blog_storage[blog_data.blog_id] = blog_data
+
+    # Store in MongoDB with embeddings
+    try:
+        store_blog_with_embedding(blog_data)
+        print(f"✅ Blog stored in MongoDB with embeddings: {blog_data.title}")
+    except Exception as e:
+        print(f"❌ Failed to store in MongoDB: {str(e)}")
+
     return blog_data.blog_id
 
 def get_blog(blog_id):
@@ -142,7 +159,7 @@ def get_blog(blog_id):
     return blog_storage.get(blog_id)
 
 def update_blog(blog_id, updated_data):
-    """Update existing blog and increment version"""
+    """Update existing blog in memory and MongoDB with new embeddings"""
     if blog_id in blog_storage:
         existing_blog = blog_storage[blog_id]
         existing_blog.blog_version += 1
@@ -154,6 +171,14 @@ def update_blog(blog_id, updated_data):
 
         updated_blog = Blog(**updated_blog_dict)
         blog_storage[blog_id] = updated_blog
+
+        # Update in MongoDB with new embeddings
+        try:
+            update_blog_with_embedding(updated_blog)
+            print(f"✅ Blog updated in MongoDB with new embeddings: {updated_blog.title}")
+        except Exception as e:
+            print(f"❌ Failed to update in MongoDB: {str(e)}")
+
         return updated_blog
     return None
 
@@ -173,6 +198,48 @@ def save_blog_to_json(blog_data, filename=None):
         json.dump(blog_dict, f, indent=2, ensure_ascii=False)
 
     return filename
+
+# New MongoDB-specific functions
+def search_blogs_in_db(query: str, limit: int = 5):
+    """Search blogs in MongoDB using vector search"""
+    try:
+        results = search_blogs(query, limit)
+        return results
+    except Exception as e:
+        print(f"❌ Search failed: {str(e)}")
+        return []
+
+def get_blog_from_db(blog_id: str):
+    """Get blog from MongoDB by ID"""
+    try:
+        return get_blog_by_id(blog_id)
+    except Exception as e:
+        print(f"❌ Failed to get blog from DB: {str(e)}")
+        return None
+
+def list_mongodb_blogs(limit: int = 50):
+    """List all blogs from MongoDB"""
+    try:
+        return list_all_stored_blogs(limit)
+    except Exception as e:
+        print(f"❌ Failed to list blogs from DB: {str(e)}")
+        return []
+
+def migrate_existing_blogs():
+    """Migrate all in-memory blogs to MongoDB"""
+    try:
+        if blog_storage:
+            count = migrate_memory_to_mongodb(blog_storage)
+            print(f"✅ Migrated {count} blogs to MongoDB with embeddings")
+            return count
+        else:
+            print("No blogs in memory to migrate")
+            return 0
+    except Exception as e:
+        print(f"❌ Migration failed: {str(e)}")
+        return 0
+
+
 
 # Create agent with memory
 def create_blog_agent():
