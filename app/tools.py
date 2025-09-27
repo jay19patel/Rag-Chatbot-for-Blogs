@@ -16,8 +16,8 @@ def list_blogs() -> str:
 
 @tool
 def create_new_blog(topic: str) -> str:
-    """Generate and store a new blog based on the given topic."""
-    from app.blog_service import generate_blog, store_blog
+    """Generate a new blog based on the given topic (without storing to database)."""
+    from app.blog_service import generate_blog, store_blog_in_memory_only
 
     if not topic.strip():
         return "❌ Please provide a topic for the blog"
@@ -25,8 +25,8 @@ def create_new_blog(topic: str) -> str:
     try:
         print(f"🔄 Generating blog for: {topic}")
         blog = generate_blog(topic)
-        blog_id = store_blog(blog)
-        return f"✅ Blog generated and stored!\n🆔 Blog ID: {blog_id}\n📝 Title: {blog.title}\n🔢 Version: {blog.blog_version}"
+        blog_id = store_blog_in_memory_only(blog)
+        return f"✅ Blog generated successfully!\n🆔 Blog ID: {blog_id}\n📝 Title: {blog.title}\n🔢 Version: {blog.blog_version}\n\n⚠️ Blog is created but not yet saved to database. Use save_blog_to_database tool to save it permanently."
     except Exception as e:
         return f"❌ Error generating blog: {str(e)}"
 
@@ -80,22 +80,47 @@ def show_blog_details(blog_id: str) -> str:
         return f"❌ Blog with ID {blog_id} not found"
 
 @tool
-def save_blog_to_file(blog_id: str) -> str:
-    """Save a blog to a JSON file."""
-    from app.blog_service import get_blog, save_blog_to_json
+def save_blog_to_database(blog_id: str) -> str:
+    """Save a blog to MongoDB database with embeddings."""
+    from app.blog_service import get_blog, save_blog_to_database_permanently
+
+    # Handle None or empty blog_id
+    if blog_id is None:
+        return "❌ Please provide a blog_id. No blog_id was provided."
+
+    if not isinstance(blog_id, str):
+        return f"❌ Invalid blog_id format. Expected string, got {type(blog_id).__name__}"
 
     if not blog_id.strip():
-        return "❌ Please provide a blog_id"
+        return "❌ Please provide a valid blog_id. Empty string provided."
 
-    blog = get_blog(blog_id)
+    blog = get_blog(blog_id.strip())
     if blog:
         try:
-            filename = save_blog_to_json(blog)
-            return f"💾 Blog saved to: {filename}"
+            save_blog_to_database_permanently(blog)
+            return f"💾 Blog saved to database successfully!\n🆔 Blog ID: {blog_id.strip()}\n📝 Title: {blog.title}\n🔍 Embeddings created for search functionality"
         except Exception as e:
-            return f"❌ Error saving blog: {str(e)}"
+            return f"❌ Error saving blog to database: {str(e)}"
     else:
-        return f"❌ Blog with ID {blog_id} not found"
+        return f"❌ Blog with ID '{blog_id.strip()}' not found in memory. Make sure to create the blog first using create_new_blog tool."
+
+@tool
+def save_latest_blog_to_database() -> str:
+    """Save the most recently created blog to MongoDB database with embeddings."""
+    from app.blog_service import blog_storage, save_blog_to_database_permanently
+
+    if not blog_storage:
+        return "❌ No blogs found in memory. Please create a blog first using create_new_blog tool."
+
+    # Get the most recent blog (last added to storage)
+    latest_blog_id = list(blog_storage.keys())[-1]
+    latest_blog = blog_storage[latest_blog_id]
+
+    try:
+        save_blog_to_database_permanently(latest_blog)
+        return f"💾 Latest blog saved to database successfully!\n🆔 Blog ID: {latest_blog_id}\n📝 Title: {latest_blog.title}\n🔍 Embeddings created for search functionality"
+    except Exception as e:
+        return f"❌ Error saving latest blog to database: {str(e)}"
 
 # List of all available tools
 available_tools = [
@@ -103,5 +128,6 @@ available_tools = [
     create_new_blog,
     update_existing_blog,
     show_blog_details,
-    save_blog_to_file
+    save_blog_to_database,
+    save_latest_blog_to_database
 ]

@@ -109,10 +109,18 @@ agent_prompt = ChatPromptTemplate.from_messages([
 
     You have access to the following blog management tools:
     - list_blogs: List all stored blogs
-    - create_new_blog: Generate and store a new blog based on a topic
+    - create_new_blog: Generate a new blog based on a topic (creates in memory only)
     - update_existing_blog: Update an existing blog with new content
     - show_blog_details: Show detailed information about a specific blog
-    - save_blog_to_file: Save a blog to a JSON file
+    - save_blog_to_database: Save a specific blog to MongoDB database with embeddings (requires blog_id)
+    - save_latest_blog_to_database: Save the most recently created blog to MongoDB database with embeddings (no blog_id needed)
+
+    IMPORTANT WORKFLOW:
+    1. When creating a blog: Use create_new_blog tool (this only creates the blog in memory)
+    2. When user wants to save:
+       - Use save_blog_to_database tool if you know the specific blog_id
+       - Use save_latest_blog_to_database tool to save the most recently created blog
+    3. The user has full control over when blogs are saved to the database
 
     You remember our previous conversations and can reference:
     - Previously created blogs and their IDs
@@ -123,10 +131,11 @@ agent_prompt = ChatPromptTemplate.from_messages([
 
     Examples:
     - "list all blogs" → use list_blogs tool
-    - "create a blog about AI" → use create_new_blog tool with topic "AI"
+    - "create a blog about AI" → use create_new_blog tool with topic "AI" (blog will be created but not saved to database)
+    - "save my blog" or "save latest blog" → use save_latest_blog_to_database tool
+    - "save blog abc123" → use save_blog_to_database tool with specific blog_id
     - "update blog abc123 with topic machine learning" → use update_existing_blog tool
     - "show details of blog xyz789" → use show_blog_details tool
-    - "save blog def456 to file" → use save_blog_to_file tool
     - "update my last blog" → reference previous conversation to get blog ID
 
     Always be helpful and provide clear feedback to the user. Use the conversation history to provide context-aware responses."""),
@@ -140,8 +149,25 @@ def generate_blog(user_prompt):
     result = chain.invoke({"text": user_prompt})
     return result
 
+def store_blog_in_memory_only(blog_data):
+    """Store blog only in memory (not in database), return the blog_id"""
+    # Store in memory only
+    blog_storage[blog_data.blog_id] = blog_data
+    print(f"✅ Blog stored in memory: {blog_data.title}")
+    return blog_data.blog_id
+
+def save_blog_to_database_permanently(blog_data):
+    """Save blog to MongoDB with embeddings, return the blog_id"""
+    try:
+        store_blog_with_embedding(blog_data)
+        print(f"✅ Blog saved to MongoDB with embeddings: {blog_data.title}")
+        return blog_data.blog_id
+    except Exception as e:
+        print(f"❌ Failed to save to MongoDB: {str(e)}")
+        raise e
+
 def store_blog(blog_data):
-    """Store blog in memory and MongoDB with embeddings, return the blog_id"""
+    """Store blog in memory and MongoDB with embeddings, return the blog_id (Legacy function)"""
     # Store in memory for backward compatibility
     blog_storage[blog_data.blog_id] = blog_data
 
@@ -187,17 +213,6 @@ def list_all_blogs():
     return {blog_id: {"title": blog.title, "version": blog.blog_version, "slug": blog.slug}
             for blog_id, blog in blog_storage.items()}
 
-def save_blog_to_json(blog_data, filename=None):
-    if filename is None:
-        filename = f"blog_{blog_data.slug}_v{blog_data.blog_version}.json"
-
-    # Use mode='json' to serialize HttpUrl and other custom types properly
-    blog_dict = blog_data.model_dump(mode='json')
-
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(blog_dict, f, indent=2, ensure_ascii=False)
-
-    return filename
 
 # New MongoDB-specific functions
 def search_blogs_in_db(query: str, limit: int = 5):
