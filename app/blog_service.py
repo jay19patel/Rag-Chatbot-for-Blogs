@@ -7,8 +7,8 @@ from langchain.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
-from app.models.blog import Blog
-from app.core.config import settings
+from app.blog_schema import Blog
+from app.config import settings
 import json
 from typing import Dict
 
@@ -83,7 +83,7 @@ prompt = PromptTemplate(
 )
 
 llm = ChatMistralAI(
-    model="mistral-large-latest",
+    model=settings.DEFAULT_MODEL,
     api_key=settings.MISTRAL_API_KEY,
     temperature=settings.TEMPERATURE,
     max_retries=2
@@ -176,7 +176,7 @@ def save_blog_to_json(blog_data, filename=None):
 
 # Create agent with memory
 def create_blog_agent():
-    from app.utils.tools import available_tools
+    from app.tools import available_tools
 
     agent = create_tool_calling_agent(llm, available_tools, agent_prompt)
     agent_executor = AgentExecutor(
