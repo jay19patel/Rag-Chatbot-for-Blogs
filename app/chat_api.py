@@ -24,6 +24,15 @@ class ListBlogsResponse(BaseModel):
     total_count: int
     limit: int
 
+class BlogResponse(BaseModel):
+    blog: Optional[Dict[str, Any]]
+    message: str
+
+class LikeResponse(BaseModel):
+    success: bool
+    message: str
+    total_likes: Optional[int] = None
+
 # Initialize the agent
 blog_agent = create_blog_agent()
 
@@ -106,4 +115,80 @@ async def list_blogs_endpoint(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error listing blogs: {str(e)}")
+
+@router.get("/blogs/{slug}", response_model=BlogResponse)
+async def get_blog_by_slug_endpoint(slug: str):
+    """
+    Get a blog by its slug and automatically increment view count.
+
+    Args:
+        slug: The blog slug to retrieve
+
+    Returns:
+        BlogResponse with full blog data or error message
+    """
+    try:
+        from app.db_storage import get_blog_by_slug
+
+        blog = get_blog_by_slug(slug)
+
+        if blog:
+            return BlogResponse(
+                blog=blog,
+                message="Blog retrieved successfully"
+            )
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Blog with slug '{slug}' not found"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving blog: {str(e)}")
+
+@router.post("/blogs/{slug}/like", response_model=LikeResponse)
+async def like_blog_endpoint(slug: str):
+    """
+    Increment likes for a blog by its slug.
+
+    Args:
+        slug: The blog slug to like
+
+    Returns:
+        LikeResponse with success status and updated like count
+    """
+    try:
+        from app.db_storage import increment_blog_likes, get_blog_by_slug_without_view_increment
+
+        # First check if blog exists (without incrementing views)
+        blog = get_blog_by_slug_without_view_increment(slug)
+        if not blog:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Blog with slug '{slug}' not found"
+            )
+
+        # Increment likes and get updated blog
+        updated_blog = increment_blog_likes(slug)
+
+        if updated_blog:
+            total_likes = updated_blog.get('likes', 0)
+
+            return LikeResponse(
+                success=True,
+                message="Blog liked successfully! ❤️",
+                total_likes=total_likes
+            )
+        else:
+            return LikeResponse(
+                success=False,
+                message="Failed to like blog"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error liking blog: {str(e)}")
 

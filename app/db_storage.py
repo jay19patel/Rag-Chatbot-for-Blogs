@@ -206,6 +206,86 @@ def list_all_stored_blogs(limit: int = 50) -> List[Dict]:
         logger.error(f"Error listing blogs: {str(e)}")
         raise
 
+def get_blog_by_slug(slug: str) -> Optional[Dict]:
+    """
+    Retrieve a blog by its slug and increment view count.
+
+    Args:
+        slug: The blog slug to search for
+
+    Returns:
+        Optional[Dict]: Blog data if found, None otherwise
+    """
+    try:
+        # Find and increment views in one operation
+        result = collection.find_one_and_update(
+            {"slug": slug, "document_type": "blog"},
+            {"$inc": {"views": 1}},
+            return_document=True
+        )
+
+        if result:
+            # Remove MongoDB's _id field for cleaner response
+            result.pop('_id', None)
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error retrieving blog by slug {slug}: {str(e)}")
+        raise
+
+def increment_blog_likes(slug: str) -> Optional[Dict]:
+    """
+    Increment the likes count for a blog by slug and return updated blog.
+
+    Args:
+        slug: The blog slug
+
+    Returns:
+        Optional[Dict]: Updated blog data if successful, None if blog not found
+    """
+    try:
+        result = collection.find_one_and_update(
+            {"slug": slug, "document_type": "blog"},
+            {"$inc": {"likes": 1}},
+            return_document=True
+        )
+
+        if result:
+            # Remove MongoDB's _id field for cleaner response
+            result.pop('_id', None)
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error incrementing likes for blog {slug}: {str(e)}")
+        raise
+
+def get_blog_by_slug_without_view_increment(slug: str) -> Optional[Dict]:
+    """
+    Retrieve a blog by its slug WITHOUT incrementing view count.
+
+    Args:
+        slug: The blog slug to search for
+
+    Returns:
+        Optional[Dict]: Blog data if found, None otherwise
+    """
+    try:
+        result = collection.find_one(
+            {"slug": slug, "document_type": "blog"}
+        )
+
+        if result:
+            # Remove MongoDB's _id field for cleaner response
+            result.pop('_id', None)
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error retrieving blog by slug {slug}: {str(e)}")
+        raise
+
 def delete_blog(blog_id: str) -> bool:
     """
     Delete a blog from MongoDB.
