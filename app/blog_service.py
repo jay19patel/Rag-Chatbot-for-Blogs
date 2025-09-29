@@ -1,3 +1,4 @@
+from typing import Dict, Optional
 from langchain_mistralai import ChatMistralAI
 from langchain.prompts import PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
@@ -11,27 +12,19 @@ from app.blog_schema import Blog
 from app.config import settings
 from app.db_storage import (
     store_blog_with_embedding,
-    update_blog_with_embedding,
-    search_blogs,
-    get_blog_by_id,
-    list_all_stored_blogs,
-    migrate_memory_to_mongodb
+    update_blog_with_embedding
 )
-import json
-from typing import Dict
 
-# In-memory blog storage
+# Temporary in-memory blog storage for session management
 blog_storage: Dict[str, Blog] = {}
 
-# LangChain memory for conversation history
+# Session management
+session_store = {}
 memory = ConversationBufferMemory(
     memory_key="chat_history",
     return_messages=True,
     output_key="output"
 )
-
-# Session store for message history
-session_store = {}
 
 parser = PydanticOutputParser(pydantic_object=Blog)
 
@@ -97,8 +90,15 @@ llm = ChatMistralAI(
     max_retries=2
 )
 
-# Function to get session history
 def get_session_history(session_id: str) -> ChatMessageHistory:
+    """Get or create chat message history for a session.
+
+    Args:
+        session_id: Unique session identifier
+
+    Returns:
+        ChatMessageHistory for the session
+    """
     if session_id not in session_store:
         session_store[session_id] = ChatMessageHistory()
     return session_store[session_id]
@@ -144,120 +144,117 @@ agent_prompt = ChatPromptTemplate.from_messages([
     ("placeholder", "{agent_scratchpad}"),
 ])
 
-def generate_blog(user_prompt):
+def generate_blog(user_prompt: str) -> Blog:
+    """Generate a blog post from a user prompt.
+
+    Args:
+        user_prompt: The topic or prompt for blog generation
+
+    Returns:
+        Blog: Generated blog object
+    """
     chain = prompt | llm | parser
     result = chain.invoke({"text": user_prompt})
     return result
 
-def store_blog_in_memory_only(blog_data):
-    """Store blog only in memory (not in database), return the blog_id"""
-    # Store in memory only
+def store_blog_in_memory(blog_data: Blog) -> str:
+    """Store blog temporarily in memory for session management.
+
+    Args:
+        blog_data: Blog object to store
+
+    Returns:
+        str: Blog ID
+    """
     blog_storage[blog_data.blog_id] = blog_data
-    print(f"✅ Blog stored in memory: {blog_data.title}")
     return blog_data.blog_id
 
-def save_blog_to_database_permanently(blog_data):
-    """Save blog to MongoDB with embeddings, return the blog_id"""
+def save_blog_to_database(blog_data: Blog) -> str:
+    """Save blog permanently to MongoDB with embeddings.
+
+    Args:
+        blog_data: Blog object to save
+
+    Returns:
+        str: Blog ID
+
+    Raises:
+        Exception: If saving to database fails
+    """
     try:
         store_blog_with_embedding(blog_data)
-        print(f"✅ Blog saved to MongoDB with embeddings: {blog_data.title}")
         return blog_data.blog_id
     except Exception as e:
-        print(f"❌ Failed to save to MongoDB: {str(e)}")
-        raise e
+        raise Exception(f"Failed to save blog to database: {str(e)}")
 
-def store_blog(blog_data):
-    """Store blog in memory and MongoDB with embeddings, return the blog_id (Legacy function)"""
-    # Store in memory for backward compatibility
-    blog_storage[blog_data.blog_id] = blog_data
+def get_blog_from_memory(blog_id: str) -> Optional[Blog]:
+    """Retrieve blog from memory by blog_id.
 
-    # Store in MongoDB with embeddings
-    try:
-        store_blog_with_embedding(blog_data)
-        print(f"✅ Blog stored in MongoDB with embeddings: {blog_data.title}")
-    except Exception as e:
-        print(f"❌ Failed to store in MongoDB: {str(e)}")
+    Args:
+        blog_id: ID of the blog to retrieve
 
-    return blog_data.blog_id
-
-def get_blog(blog_id):
-    """Retrieve blog from memory by blog_id"""
+    Returns:
+        Blog object if found, None otherwise
+    """
     return blog_storage.get(blog_id)
 
-def update_blog(blog_id, updated_data):
-    """Update existing blog in memory and MongoDB with new embeddings"""
-    if blog_id in blog_storage:
-        existing_blog = blog_storage[blog_id]
-        existing_blog.blog_version += 1
+def update_blog_content(blog_id: str, updated_data: Blog) -> Optional[Blog]:
+    """Update existing blog in memory and MongoDB.
 
-        # Update the blog with new data while keeping the same blog_id and incrementing version
-        updated_blog_dict = updated_data.model_dump()
-        updated_blog_dict['blog_id'] = blog_id
-        updated_blog_dict['blog_version'] = existing_blog.blog_version
+    Args:
+        blog_id: ID of the blog to update
+        updated_data: New blog data
 
-        updated_blog = Blog(**updated_blog_dict)
-        blog_storage[blog_id] = updated_blog
+    Returns:
+        Updated Blog object if successful, None if blog not found
 
-        # Update in MongoDB with new embeddings
-        try:
-            update_blog_with_embedding(updated_blog)
-            print(f"✅ Blog updated in MongoDB with new embeddings: {updated_blog.title}")
-        except Exception as e:
-            print(f"❌ Failed to update in MongoDB: {str(e)}")
-
-        return updated_blog
-    return None
-
-def list_all_blogs():
-    """List all stored blogs with their IDs and versions"""
-    return {blog_id: {"title": blog.title, "version": blog.blog_version, "slug": blog.slug}
-            for blog_id, blog in blog_storage.items()}
-
-
-# New MongoDB-specific functions
-def search_blogs_in_db(query: str, limit: int = 5):
-    """Search blogs in MongoDB using vector search"""
-    try:
-        results = search_blogs(query, limit)
-        return results
-    except Exception as e:
-        print(f"❌ Search failed: {str(e)}")
-        return []
-
-def get_blog_from_db(blog_id: str):
-    """Get blog from MongoDB by ID"""
-    try:
-        return get_blog_by_id(blog_id)
-    except Exception as e:
-        print(f"❌ Failed to get blog from DB: {str(e)}")
+    Raises:
+        Exception: If updating in database fails
+    """
+    if blog_id not in blog_storage:
         return None
 
-def list_mongodb_blogs(limit: int = 50):
-    """List all blogs from MongoDB"""
+    existing_blog = blog_storage[blog_id]
+    existing_blog.blog_version += 1
+
+    # Update the blog with new data while preserving ID and incrementing version
+    updated_blog_dict = updated_data.model_dump()
+    updated_blog_dict['blog_id'] = blog_id
+    updated_blog_dict['blog_version'] = existing_blog.blog_version
+
+    updated_blog = Blog(**updated_blog_dict)
+    blog_storage[blog_id] = updated_blog
+
+    # Update in MongoDB with new embeddings
     try:
-        return list_all_stored_blogs(limit)
+        update_blog_with_embedding(updated_blog)
+        return updated_blog
     except Exception as e:
-        print(f"❌ Failed to list blogs from DB: {str(e)}")
-        return []
+        raise Exception(f"Failed to update blog in database: {str(e)}")
 
-def migrate_existing_blogs():
-    """Migrate all in-memory blogs to MongoDB"""
-    try:
-        if blog_storage:
-            count = migrate_memory_to_mongodb(blog_storage)
-            print(f"✅ Migrated {count} blogs to MongoDB with embeddings")
-            return count
-        else:
-            print("No blogs in memory to migrate")
-            return 0
-    except Exception as e:
-        print(f"❌ Migration failed: {str(e)}")
-        return 0
+def list_memory_blogs() -> Dict[str, Dict[str, any]]:
+    """List all blogs currently in memory.
+
+    Returns:
+        Dictionary mapping blog IDs to blog info
+    """
+    return {
+        blog_id: {
+            "title": blog.title,
+            "version": blog.blog_version,
+            "slug": blog.slug
+        }
+        for blog_id, blog in blog_storage.items()
+    }
 
 
 
-# Create agent with memory
 def create_blog_agent():
+    """Create blog management agent with conversation history.
+
+    Returns:
+        Agent executor with chat history support
+    """
     from app.tools import available_tools
 
     agent = create_tool_calling_agent(llm, available_tools, agent_prompt)

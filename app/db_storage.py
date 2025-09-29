@@ -1,17 +1,22 @@
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
-from app.db import vector_store, collection
-from app.blog_schema import Blog
 import logging
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+from app.db import vector_store, collection
+from app.blog_schema import Blog
+
 logger = logging.getLogger(__name__)
 
 def create_embedding_text(blog: Blog) -> str:
-    """
-    Create a comprehensive text representation of the blog for embedding.
-    This combines title, subtitle, excerpt, content, and tags for better search.
+    """Create comprehensive text representation for embedding.
+
+    Combines all blog content into a single text for vector search.
+
+    Args:
+        blog: Blog object to create embedding text for
+
+    Returns:
+        Combined text string for embedding
     """
     embedding_parts = []
 
@@ -57,14 +62,16 @@ def create_embedding_text(blog: Blog) -> str:
     return " | ".join(embedding_parts)
 
 def store_blog_with_embedding(blog: Blog) -> str:
-    """
-    Store a blog in MongoDB with proper embedding for vector search.
+    """Store blog in MongoDB with vector embeddings.
 
     Args:
         blog: Blog object to store
 
     Returns:
-        str: The blog_id of the stored blog
+        Blog ID of stored blog
+
+    Raises:
+        Exception: If storage fails
     """
     try:
         # Create embedding text
@@ -96,14 +103,16 @@ def store_blog_with_embedding(blog: Blog) -> str:
         raise
 
 def update_blog_with_embedding(blog: Blog) -> str:
-    """
-    Update an existing blog in MongoDB with new embeddings.
+    """Update existing blog with new embeddings.
 
     Args:
         blog: Updated Blog object
 
     Returns:
-        str: The blog_id of the updated blog
+        Blog ID of updated blog
+
+    Raises:
+        Exception: If update fails
     """
     try:
         # First, delete the existing document
@@ -117,15 +126,17 @@ def update_blog_with_embedding(blog: Blog) -> str:
         raise
 
 def search_blogs(query: str, limit: int = 5) -> List[Dict]:
-    """
-    Search blogs using vector similarity search.
+    """Search blogs using vector similarity.
 
     Args:
         query: Search query string
-        limit: Maximum number of results to return
+        limit: Maximum number of results
 
     Returns:
-        List[Dict]: List of matching blog documents with similarity scores
+        List of matching blogs with relevance scores
+
+    Raises:
+        Exception: If search fails
     """
     try:
         # Perform similarity search
@@ -155,14 +166,16 @@ def search_blogs(query: str, limit: int = 5) -> List[Dict]:
         raise
 
 def get_blog_by_id(blog_id: str) -> Optional[Dict]:
-    """
-    Retrieve a specific blog by its ID.
+    """Retrieve blog by ID.
 
     Args:
-        blog_id: The blog ID to search for
+        blog_id: Blog ID to search for
 
     Returns:
-        Optional[Dict]: Blog data if found, None otherwise
+        Blog data if found, None otherwise
+
+    Raises:
+        Exception: If retrieval fails
     """
     try:
         result = collection.find_one({"blog_id": blog_id})
@@ -176,14 +189,16 @@ def get_blog_by_id(blog_id: str) -> Optional[Dict]:
         raise
 
 def list_all_stored_blogs(limit: int = 50) -> List[Dict]:
-    """
-    List all blogs stored in MongoDB.
+    """List all stored blogs.
 
     Args:
         limit: Maximum number of blogs to return
 
     Returns:
-        List[Dict]: List of blog summaries
+        List of blog summaries
+
+    Raises:
+        Exception: If listing fails
     """
     try:
         cursor = collection.find(
@@ -207,14 +222,16 @@ def list_all_stored_blogs(limit: int = 50) -> List[Dict]:
         raise
 
 def get_blog_by_slug(slug: str) -> Optional[Dict]:
-    """
-    Retrieve a blog by its slug and increment view count.
+    """Retrieve blog by slug and increment views.
 
     Args:
-        slug: The blog slug to search for
+        slug: Blog slug to search for
 
     Returns:
-        Optional[Dict]: Blog data if found, None otherwise
+        Blog data if found, None otherwise
+
+    Raises:
+        Exception: If retrieval fails
     """
     try:
         # Find and increment views in one operation
@@ -235,14 +252,16 @@ def get_blog_by_slug(slug: str) -> Optional[Dict]:
         raise
 
 def increment_blog_likes(slug: str) -> Optional[Dict]:
-    """
-    Increment the likes count for a blog by slug and return updated blog.
+    """Increment likes count for blog.
 
     Args:
-        slug: The blog slug
+        slug: Blog slug
 
     Returns:
-        Optional[Dict]: Updated blog data if successful, None if blog not found
+        Updated blog data if successful, None if not found
+
+    Raises:
+        Exception: If update fails
     """
     try:
         result = collection.find_one_and_update(
@@ -261,15 +280,17 @@ def increment_blog_likes(slug: str) -> Optional[Dict]:
         logger.error(f"Error incrementing likes for blog {slug}: {str(e)}")
         raise
 
-def get_blog_by_slug_without_view_increment(slug: str) -> Optional[Dict]:
-    """
-    Retrieve a blog by its slug WITHOUT incrementing view count.
+def get_blog_by_slug_readonly(slug: str) -> Optional[Dict]:
+    """Retrieve blog by slug without incrementing views.
 
     Args:
-        slug: The blog slug to search for
+        slug: Blog slug to search for
 
     Returns:
-        Optional[Dict]: Blog data if found, None otherwise
+        Blog data if found, None otherwise
+
+    Raises:
+        Exception: If retrieval fails
     """
     try:
         result = collection.find_one(
@@ -287,14 +308,16 @@ def get_blog_by_slug_without_view_increment(slug: str) -> Optional[Dict]:
         raise
 
 def delete_blog(blog_id: str) -> bool:
-    """
-    Delete a blog from MongoDB.
+    """Delete blog from MongoDB.
 
     Args:
-        blog_id: The blog ID to delete
+        blog_id: Blog ID to delete
 
     Returns:
-        bool: True if deleted successfully, False otherwise
+        True if deleted successfully, False otherwise
+
+    Raises:
+        Exception: If deletion fails
     """
     try:
         result = collection.delete_one({"blog_id": blog_id})
@@ -304,26 +327,24 @@ def delete_blog(blog_id: str) -> bool:
         logger.error(f"Error deleting blog {blog_id}: {str(e)}")
         raise
 
-# Migration function to move existing in-memory blogs to MongoDB
-def migrate_memory_to_mongodb(blog_storage: Dict[str, Blog]) -> int:
-    """
-    Migrate existing in-memory blog storage to MongoDB with embeddings.
+def bulk_store_blogs(blogs: List[Blog]) -> int:
+    """Store multiple blogs in MongoDB with embeddings.
 
     Args:
-        blog_storage: Dictionary of blog_id -> Blog objects
+        blogs: List of Blog objects to store
 
     Returns:
-        int: Number of blogs successfully migrated
+        Number of blogs successfully stored
     """
-    migrated_count = 0
+    stored_count = 0
 
-    for blog_id, blog in blog_storage.items():
+    for blog in blogs:
         try:
             store_blog_with_embedding(blog)
-            migrated_count += 1
-            logger.info(f"Migrated blog: {blog.title}")
+            stored_count += 1
+            logger.info(f"Stored blog: {blog.title}")
         except Exception as e:
-            logger.error(f"Failed to migrate blog {blog_id}: {str(e)}")
+            logger.error(f"Failed to store blog {blog.blog_id}: {str(e)}")
 
-    logger.info(f"Migration complete. Migrated {migrated_count} out of {len(blog_storage)} blogs.")
-    return migrated_count
+    logger.info(f"Bulk storage complete. Stored {stored_count} out of {len(blogs)} blogs.")
+    return stored_count
