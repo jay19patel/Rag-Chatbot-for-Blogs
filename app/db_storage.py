@@ -68,7 +68,7 @@ def store_blog_with_embedding(blog: Blog) -> str:
         blog: Blog object to store
 
     Returns:
-        Blog ID of stored blog
+        MongoDB _id of stored blog
 
     Raises:
         Exception: If storage fails
@@ -82,47 +82,53 @@ def store_blog_with_embedding(blog: Blog) -> str:
 
         # Add metadata for better organization
         blog_dict.update({
-            'embedding_text': embedding_text,
             'created_at': datetime.now(timezone.utc),
             'updated_at': datetime.now(timezone.utc),
             'document_type': 'blog'
         })
 
-        # Store in vector store (this will automatically create embeddings)
+        # Insert into MongoDB first to get _id
+        result = collection.insert_one(blog_dict)
+        blog_id = str(result.inserted_id)
+
+        # Store in vector store with MongoDB _id
         vector_store.add_texts(
             texts=[embedding_text],
             metadatas=[blog_dict],
-            ids=[blog.blog_id]
+            ids=[blog_id]
         )
 
-        logger.info(f"Successfully stored blog {blog.blog_id} with embeddings")
-        return blog.blog_id
+        logger.info(f"Successfully stored blog {blog_id} with embeddings")
+        return blog_id
 
     except Exception as e:
-        logger.error(f"Error storing blog {blog.blog_id}: {str(e)}")
+        logger.error(f"Error storing blog: {str(e)}")
         raise
 
-def update_blog_with_embedding(blog: Blog) -> str:
+def update_blog_with_embedding(blog_id: str, blog: Blog) -> str:
     """Update existing blog with new embeddings.
 
     Args:
+        blog_id: MongoDB _id of the blog to update
         blog: Updated Blog object
 
     Returns:
-        Blog ID of updated blog
+        MongoDB _id of updated blog
 
     Raises:
         Exception: If update fails
     """
     try:
+        from bson.objectid import ObjectId
+
         # First, delete the existing document
-        collection.delete_one({"blog_id": blog.blog_id})
+        collection.delete_one({"_id": ObjectId(blog_id)})
 
         # Then store the updated version
         return store_blog_with_embedding(blog)
 
     except Exception as e:
-        logger.error(f"Error updating blog {blog.blog_id}: {str(e)}")
+        logger.error(f"Error updating blog {blog_id}: {str(e)}")
         raise
 
 def search_blogs(query: str, limit: int = 5) -> List[Dict]:
@@ -150,7 +156,7 @@ def search_blogs(query: str, limit: int = 5) -> List[Dict]:
         for doc, score in results:
             blog_data = doc.metadata
             formatted_results.append({
-                'blog_id': blog_data.get('blog_id'),
+                '_id': blog_data.get('_id'),
                 'title': blog_data.get('title'),
                 'excerpt': blog_data.get('excerpt'),
                 'category': blog_data.get('category'),
@@ -166,10 +172,10 @@ def search_blogs(query: str, limit: int = 5) -> List[Dict]:
         raise
 
 def get_blog_by_id(blog_id: str) -> Optional[Dict]:
-    """Retrieve blog by ID.
+    """Retrieve blog by MongoDB _id.
 
     Args:
-        blog_id: Blog ID to search for
+        blog_id: MongoDB _id to search for
 
     Returns:
         Blog data if found, None otherwise
@@ -178,10 +184,12 @@ def get_blog_by_id(blog_id: str) -> Optional[Dict]:
         Exception: If retrieval fails
     """
     try:
-        result = collection.find_one({"blog_id": blog_id})
+        from bson.objectid import ObjectId
+
+        result = collection.find_one({"_id": ObjectId(blog_id)})
         if result:
-            # Remove MongoDB's _id field for cleaner response
-            result.pop('_id', None)
+            # Convert ObjectId to string
+            result['_id'] = str(result['_id'])
         return result
 
     except Exception as e:
@@ -204,18 +212,22 @@ def list_all_stored_blogs(limit: int = 50) -> List[Dict]:
         cursor = collection.find(
             {"document_type": "blog"},
             {
-                "blog_id": 1,
+                "_id": 1,
                 "title": 1,
                 "excerpt": 1,
                 "category": 1,
                 "tags": 1,
                 "blog_version": 1,
-                "created_at": 1,
-                "_id": 0
+                "created_at": 1
             }
         ).limit(limit).sort("created_at", -1)
 
-        return list(cursor)
+        blogs = []
+        for blog in cursor:
+            blog['_id'] = str(blog['_id'])
+            blogs.append(blog)
+
+        return blogs
 
     except Exception as e:
         logger.error(f"Error listing blogs: {str(e)}")
@@ -242,8 +254,8 @@ def get_blog_by_slug(slug: str) -> Optional[Dict]:
         )
 
         if result:
-            # Remove MongoDB's _id field for cleaner response
-            result.pop('_id', None)
+            # Convert ObjectId to string
+            result['_id'] = str(result['_id'])
 
         return result
 
@@ -271,8 +283,8 @@ def increment_blog_likes(slug: str) -> Optional[Dict]:
         )
 
         if result:
-            # Remove MongoDB's _id field for cleaner response
-            result.pop('_id', None)
+            # Convert ObjectId to string
+            result['_id'] = str(result['_id'])
 
         return result
 
@@ -298,8 +310,8 @@ def get_blog_by_slug_readonly(slug: str) -> Optional[Dict]:
         )
 
         if result:
-            # Remove MongoDB's _id field for cleaner response
-            result.pop('_id', None)
+            # Convert ObjectId to string
+            result['_id'] = str(result['_id'])
 
         return result
 
@@ -311,7 +323,7 @@ def delete_blog(blog_id: str) -> bool:
     """Delete blog from MongoDB.
 
     Args:
-        blog_id: Blog ID to delete
+        blog_id: MongoDB _id to delete
 
     Returns:
         True if deleted successfully, False otherwise
@@ -320,7 +332,9 @@ def delete_blog(blog_id: str) -> bool:
         Exception: If deletion fails
     """
     try:
-        result = collection.delete_one({"blog_id": blog_id})
+        from bson.objectid import ObjectId
+
+        result = collection.delete_one({"_id": ObjectId(blog_id)})
         return result.deleted_count > 0
 
     except Exception as e:

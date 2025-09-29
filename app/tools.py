@@ -1,4 +1,5 @@
 from langchain.tools import tool
+import uuid
 
 @tool
 def list_blogs() -> str:
@@ -24,30 +25,24 @@ def create_new_blog(topic: str) -> str:
 
     try:
         blog = generate_blog(topic)
-        blog_id = store_blog_in_memory(blog)
+        temp_id = str(uuid.uuid4())
+        blog_id = store_blog_in_memory(blog, temp_id)
         return f"✅ Blog generated successfully!\n🆔 Blog ID: {blog_id}\n📝 Title: {blog.title}\n🔢 Version: {blog.blog_version}\n\n⚠️ Blog is created but not yet saved to database. Use save_blog_to_database tool to save it permanently."
     except Exception as e:
         return f"❌ Error generating blog: {str(e)}"
 
 @tool
 def update_existing_blog(blog_id: str, new_topic: str) -> str:
-    """Update an existing blog with a new topic."""
-    from app.blog_service import get_blog_from_memory, generate_blog, update_blog_content
+    """Update an existing blog with a new topic. Use MongoDB _id for blogs in database."""
+    from app.blog_service import generate_blog, update_blog_content
 
     if not blog_id.strip() or not new_topic.strip():
         return "❌ Please provide both blog_id and new_topic"
 
-    existing_blog = get_blog_from_memory(blog_id)
-    if not existing_blog:
-        return f"❌ Blog with ID {blog_id} not found"
-
     try:
         new_blog = generate_blog(new_topic)
-        updated_blog = update_blog_content(blog_id, new_blog)
-        if updated_blog:
-            return f"✅ Blog updated!\n📝 New Title: {updated_blog.title}\n🔢 New Version: {updated_blog.blog_version}"
-        else:
-            return "❌ Failed to update blog"
+        mongodb_id = update_blog_content(blog_id, new_blog)
+        return f"✅ Blog updated!\n🆔 MongoDB ID: {mongodb_id}\n📝 New Title: {new_blog.title}\n🔢 New Version: {new_blog.blog_version}"
     except Exception as e:
         return f"❌ Error updating blog: {str(e)}"
 
@@ -62,12 +57,11 @@ def show_blog_details(blog_id: str) -> str:
     blog = get_blog_from_memory(blog_id)
     if blog:
         details = f"""📖 Blog Details:
-🆔 ID: {blog.blog_id}
+🆔 ID: {blog_id}
 📝 Title: {blog.title}
 🔢 Version: {blog.blog_version}
 🏷️ Slug: {blog.slug}
 📅 Published: {blog.publishedDate}
-⏱️ Read Time: {blog.readTime}
 🏷️ Tags: {', '.join(blog.tags)}
 📁 Category: {blog.category}
 👀 Views: {blog.views}
@@ -95,8 +89,8 @@ def save_blog_to_database(blog_id: str) -> str:
     blog = get_blog_from_memory(blog_id.strip())
     if blog:
         try:
-            save_blog_to_database(blog)
-            return f"💾 Blog saved to database successfully!\n🆔 Blog ID: {blog_id.strip()}\n📝 Title: {blog.title}\n🔍 Embeddings created for search functionality"
+            mongodb_id = save_blog_to_database(blog)
+            return f"💾 Blog saved to database successfully!\n🆔 MongoDB ID: {mongodb_id}\n📝 Title: {blog.title}\n🔍 Embeddings created for search functionality"
         except Exception as e:
             return f"❌ Error saving blog to database: {str(e)}"
     else:
@@ -115,8 +109,8 @@ def save_latest_blog_to_database() -> str:
     latest_blog = blog_storage[latest_blog_id]
 
     try:
-        save_blog_to_database(latest_blog)
-        return f"💾 Latest blog saved to database successfully!\n🆔 Blog ID: {latest_blog_id}\n📝 Title: {latest_blog.title}\n🔍 Embeddings created for search functionality"
+        mongodb_id = save_blog_to_database(latest_blog)
+        return f"💾 Latest blog saved to database successfully!\n🆔 MongoDB ID: {mongodb_id}\n📝 Title: {latest_blog.title}\n🔍 Embeddings created for search functionality"
     except Exception as e:
         return f"❌ Error saving latest blog to database: {str(e)}"
 

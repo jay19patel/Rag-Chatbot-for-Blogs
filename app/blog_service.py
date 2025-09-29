@@ -4,7 +4,7 @@ from langchain.prompts import PromptTemplate
 from langchain.output_parsers import PydanticOutputParser
 from langchain.agents import create_tool_calling_agent, AgentExecutor
 from langchain_core.prompts import ChatPromptTemplate
-from langchain.memory import ConversationBufferMemory
+from langchain.memory import ConversationSummaryBufferMemory
 from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
@@ -18,13 +18,8 @@ from app.db_storage import (
 # Temporary in-memory blog storage for session management
 blog_storage: Dict[str, Blog] = {}
 
-# Session management
+# Session management - store chat histories per session
 session_store = {}
-memory = ConversationBufferMemory(
-    memory_key="chat_history",
-    return_messages=True,
-    output_key="output"
-)
 
 parser = PydanticOutputParser(pydantic_object=Blog)
 
@@ -157,17 +152,18 @@ def generate_blog(user_prompt: str) -> Blog:
     result = chain.invoke({"text": user_prompt})
     return result
 
-def store_blog_in_memory(blog_data: Blog) -> str:
+def store_blog_in_memory(blog_data: Blog, temp_id: str) -> str:
     """Store blog temporarily in memory for session management.
 
     Args:
         blog_data: Blog object to store
+        temp_id: Temporary ID for in-memory storage
 
     Returns:
-        str: Blog ID
+        str: Temporary blog ID
     """
-    blog_storage[blog_data.blog_id] = blog_data
-    return blog_data.blog_id
+    blog_storage[temp_id] = blog_data
+    return temp_id
 
 def save_blog_to_database(blog_data: Blog) -> str:
     """Save blog permanently to MongoDB with embeddings.
@@ -176,14 +172,13 @@ def save_blog_to_database(blog_data: Blog) -> str:
         blog_data: Blog object to save
 
     Returns:
-        str: Blog ID
+        str: MongoDB _id
 
     Raises:
         Exception: If saving to database fails
     """
     try:
-        store_blog_with_embedding(blog_data)
-        return blog_data.blog_id
+        return store_blog_with_embedding(blog_data)
     except Exception as e:
         raise Exception(f"Failed to save blog to database: {str(e)}")
 
@@ -198,37 +193,25 @@ def get_blog_from_memory(blog_id: str) -> Optional[Blog]:
     """
     return blog_storage.get(blog_id)
 
-def update_blog_content(blog_id: str, updated_data: Blog) -> Optional[Blog]:
-    """Update existing blog in memory and MongoDB.
+def update_blog_content(blog_id: str, updated_data: Blog) -> str:
+    """Update existing blog in MongoDB.
 
     Args:
-        blog_id: ID of the blog to update
+        blog_id: MongoDB _id of the blog to update
         updated_data: New blog data
 
     Returns:
-        Updated Blog object if successful, None if blog not found
+        MongoDB _id of updated blog
 
     Raises:
         Exception: If updating in database fails
     """
-    if blog_id not in blog_storage:
-        return None
-
-    existing_blog = blog_storage[blog_id]
-    existing_blog.blog_version += 1
-
-    # Update the blog with new data while preserving ID and incrementing version
-    updated_blog_dict = updated_data.model_dump()
-    updated_blog_dict['blog_id'] = blog_id
-    updated_blog_dict['blog_version'] = existing_blog.blog_version
-
-    updated_blog = Blog(**updated_blog_dict)
-    blog_storage[blog_id] = updated_blog
+    # Increment version
+    updated_data.blog_version += 1
 
     # Update in MongoDB with new embeddings
     try:
-        update_blog_with_embedding(updated_blog)
-        return updated_blog
+        return update_blog_with_embedding(blog_id, updated_data)
     except Exception as e:
         raise Exception(f"Failed to update blog in database: {str(e)}")
 
@@ -256,6 +239,15 @@ def create_blog_agent():
         Agent executor with chat history support
     """
     from app.tools import available_tools
+
+    # Create memory with summary buffer
+    memory = ConversationSummaryBufferMemory(
+        llm=llm,
+        memory_key="chat_history",
+        return_messages=True,
+        max_token_limit=1000,
+        output_key="output"
+    )
 
     agent = create_tool_calling_agent(llm, available_tools, agent_prompt)
     agent_executor = AgentExecutor(
