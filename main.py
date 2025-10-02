@@ -21,10 +21,10 @@ app.add_middleware(
 )
 
 # Setup templates
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="app/templates")
 
 # Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Include routers
 app.include_router(chat_router, prefix="/api/v1", tags=["chat"])
