@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
 import logging
 
@@ -131,7 +131,7 @@ def update_blog_with_embedding(blog_id: str, blog: Blog) -> str:
         logger.error(f"Error updating blog {blog_id}: {str(e)}")
         raise
 
-def search_blogs(query: str, limit: int = 5) -> List[Dict]:
+def search_blogs(query: str, limit: int = 5) -> Dict:
     """Search blogs using vector similarity.
 
     Args:
@@ -139,12 +139,15 @@ def search_blogs(query: str, limit: int = 5) -> List[Dict]:
         limit: Maximum number of results
 
     Returns:
-        List of matching blogs with relevance scores
+        Dictionary with search results and metadata
 
     Raises:
         Exception: If search fails
     """
     try:
+        # Get total count of all blogs
+        total_count = get_total_blogs_count()
+        
         # Perform similarity search
         results = vector_store.similarity_search_with_relevance_scores(
             query=query,
@@ -162,10 +165,20 @@ def search_blogs(query: str, limit: int = 5) -> List[Dict]:
                 'category': blog_data.get('category'),
                 'tags': blog_data.get('tags'),
                 'relevance_score': score,
-                'full_data': blog_data
+                'image': blog_data.get('image'),
+                "slug": blog_data.get('slug'),
+                'date': blog_data.get('publishedDate'),
+                'views': blog_data.get('views'),
+                'likes': blog_data.get('likes'),
             })
 
-        return formatted_results
+        return {
+            "blogs": formatted_results,
+            "total_count": total_count,
+            "list_total": len(formatted_results),
+            "limit": limit,
+            "query": query
+        }
 
     except Exception as e:
         logger.error(f"Error searching blogs: {str(e)}")
@@ -196,29 +209,58 @@ def get_blog_by_id(blog_id: str) -> Optional[Dict]:
         logger.error(f"Error retrieving blog {blog_id}: {str(e)}")
         raise
 
-def list_all_stored_blogs(limit: int = 50) -> List[Dict]:
-    """List all stored blogs.
+def get_total_blogs_count() -> int:
+    """Get total count of all blogs in database.
+
+    Returns:
+        Total number of blogs
+
+    Raises:
+        Exception: If count fails
+    """
+    try:
+        return collection.count_documents({"document_type": "blog"})
+    except Exception as e:
+        logger.error(f"Error counting blogs: {str(e)}")
+        raise
+
+def list_all_stored_blogs(limit: int = 50, category: Optional[str] = None) -> Dict:
+    """List all stored blogs with total count, optionally filtered by category.
 
     Args:
         limit: Maximum number of blogs to return
+        category: Optional category filter
 
     Returns:
-        List of blog summaries
+        Dictionary with blogs list and total count
 
     Raises:
         Exception: If listing fails
     """
     try:
+        # Build query filter
+        query_filter = {"document_type": "blog"}
+        if category:
+            query_filter["category"] = {"$regex": f"^{category}$", "$options": "i"}  # Case insensitive match
+        
+        # Get total count with filter
+        total_count = collection.count_documents(query_filter)
+        
         cursor = collection.find(
-            {"document_type": "blog"},
+            query_filter,
             {
                 "_id": 1,
+                "slug": 1,
+                "publishedDate": 1,
+                "views": 1,
+                "likes": 1,
                 "title": 1,
                 "excerpt": 1,
+                "image": 1,
                 "category": 1,
                 "tags": 1,
                 "blog_version": 1,
-                "created_at": 1
+                "publishedDate": 1
             }
         ).limit(limit).sort("created_at", -1)
 
@@ -227,7 +269,13 @@ def list_all_stored_blogs(limit: int = 50) -> List[Dict]:
             blog['_id'] = str(blog['_id'])
             blogs.append(blog)
 
-        return blogs
+        return {
+            "blogs": blogs,
+            "total_count": total_count,
+            "list_total": len(blogs),
+            "limit": limit,
+            "category_filter": category
+        }
 
     except Exception as e:
         logger.error(f"Error listing blogs: {str(e)}")
@@ -339,6 +387,57 @@ def delete_blog(blog_id: str) -> bool:
 
     except Exception as e:
         logger.error(f"Error deleting blog {blog_id}: {str(e)}")
+        raise
+
+def get_available_categories() -> List[Dict[str, Any]]:
+    """Get all available categories from stored blogs with blog counts.
+
+    Returns:
+        List of dictionaries with category name and count
+
+    Raises:
+        Exception: If retrieval fails
+    """
+    try:
+        pipeline = [
+            {"$match": {"document_type": "blog"}},
+            {"$group": {
+                "_id": "$category",
+                "count": {"$sum": 1}
+            }},
+            {"$sort": {"_id": 1}}
+        ]
+        
+        result = collection.aggregate(pipeline)
+        categories = []
+        for doc in result:
+            if doc["_id"]:  # Skip null/empty categories
+                categories.append({
+                    "name": doc["_id"],
+                    "count": doc["count"]
+                })
+        
+        return categories
+
+    except Exception as e:
+        logger.error(f"Error getting categories: {str(e)}")
+        raise
+
+def get_available_categories_simple() -> List[str]:
+    """Get all available categories from stored blogs (simple list).
+
+    Returns:
+        List of unique category names
+
+    Raises:
+        Exception: If retrieval fails
+    """
+    try:
+        categories_with_count = get_available_categories()
+        return [cat["name"] for cat in categories_with_count]
+
+    except Exception as e:
+        logger.error(f"Error getting categories: {str(e)}")
         raise
 
 def bulk_store_blogs(blogs: List[Blog]) -> int:
