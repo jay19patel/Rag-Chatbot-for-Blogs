@@ -46,7 +46,6 @@ CMD ["gunicorn", "main:app", \
     "--max-requests-jitter", "50", \
     "--timeout", "30", \
     "--keep-alive", "2", \
-    "--access-logfile", "/app/logs/access.log", \
-    "--error-logfile", "/app/logs/error.log", \
     "--log-level", "info", \
     "--preload"]
+
