@@ -43,6 +43,17 @@ class CategoriesResponse(BaseModel):
 # Initialize the agent
 blog_agent = create_blog_agent()
 
+@router.get("/health")
+async def health_check():
+    """
+    Health check endpoint to verify the service is running.
+    """
+    return {
+        "status": "healthy",
+        "service": "chat_api",
+        "timestamp": "2025-01-04T18:16:42Z"
+    }
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
     """
@@ -52,19 +63,52 @@ async def chat_endpoint(request: ChatRequest):
         if not request.message.strip():
             raise HTTPException(status_code=400, detail="Message cannot be empty")
 
-        # Process the message using the agent with memory
-        response = blog_agent.invoke(
-            {"input": request.message},
-            config={"configurable": {"session_id": request.session_id}}
-        )
+        # Add timeout and better error handling
+        import asyncio
+        import concurrent.futures
+        import threading
+        
+        try:
+            # Process the message using the agent with memory (with 120 second timeout)
+            # Run the synchronous agent.invoke in a thread pool to avoid blocking
+            def process_message():
+                return blog_agent.invoke(
+                    {"input": request.message},
+                    config={"configurable": {"session_id": request.session_id}}
+                )
+            
+            # Use ThreadPoolExecutor for better control
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                # Submit the task and wait for it with timeout
+                future = executor.submit(process_message)
+                try:
+                    response = future.result(timeout=120.0)  # 120 second timeout
+                except concurrent.futures.TimeoutError:
+                    raise HTTPException(
+                        status_code=408, 
+                        detail="Request timed out. The AI agent is taking too long to respond. Please try again with a simpler request."
+                    )
 
-        return ChatResponse(
-            response=response["output"],
-            session_id=request.session_id
-        )
+            return ChatResponse(
+                response=response["output"],
+                session_id=request.session_id
+            )
+            
+        except HTTPException:
+            raise
+        except Exception as agent_error:
+            # Log the specific error for debugging
+            print(f"Agent error: {str(agent_error)}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"AI agent error: {str(agent_error)}"
+            )
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing message: {str(e)}")
+        print(f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @router.get("/blogs", response_model=BlogsResponse)
 async def blogs_endpoint(

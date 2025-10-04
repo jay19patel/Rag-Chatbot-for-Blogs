@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     MEMORY_WINDOW_SIZE: int = 10  # For window memory (number of exchanges)
 
     # Model settings
-    DEFAULT_MODEL: str = "mistral-large-latest"
+    DEFAULT_MODEL: str = "mistral-medium-latest"
     MAX_TOKENS: int = 2000
     TEMPERATURE: float = 0.7
 

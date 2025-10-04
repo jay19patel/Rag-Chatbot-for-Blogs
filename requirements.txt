@@ -10,3 +10,5 @@ pymongo
 gunicorn
 langchain_community
 jinja2
+transformers
+langchain
