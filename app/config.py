@@ -1,39 +1,35 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
+
 class Settings(BaseSettings):
-    """Application settings using Pydantic BaseSettings for environment variables."""
+    """Application configuration settings"""
 
-    # Mistral AI API Key
-    MISTRAL_API_KEY: str
-    MONGO_URI: str
-    DB_NAME: str = "ai_chatbot"
-    COLLECTION_NAME: str = "documents"
-    ATLAS_VECTOR_SEARCH_INDEX_NAME: str = "vector_index"
+    # Application
+    app_name: str = "FastAPI Auth System"
+    secret_key: str
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
 
-    # App settings
-    DEBUG: bool = False
-    APP_NAME: str = "AI Chatbot"
-    VERSION: str = "1.0.0"
+    # Database
+    database_url: str = "sqlite:///./auth.db"
 
-    # Security settings
-    BLOG_SAVE_PIN: str = "1234"  # Default PIN, can be overridden in .env
+    # Google OAuth
+    google_client_id: str
+    google_client_secret: str
+    google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
 
-    # Memory settings
-    ENABLE_MEMORY: bool = True  # Enable/disable conversation memory
-    MEMORY_TYPE: str = "buffer"  # Types: buffer, summary, token_buffer, window
-    MEMORY_MAX_TOKEN_LIMIT: int = 2000  # For token_buffer memory
-    MEMORY_WINDOW_SIZE: int = 10  # For window memory (number of exchanges)
+    # Security
+    csrf_secret_key: str
 
-    # Model settings
-    DEFAULT_MODEL: str = "mistral-medium-latest"
-    MAX_TOKENS: int = 2000
-    TEMPERATURE: float = 0.7
+    # Rate Limiting
+    rate_limit_per_minute: int = 60
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False
+    )
 
-# Create settings instance
+
 settings = Settings()

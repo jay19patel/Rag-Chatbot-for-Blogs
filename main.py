@@ -1,46 +1,93 @@
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from app.chat_api import router as chat_router
+from contextlib import asynccontextmanager
+import logging
+
+from app.database import create_db_and_tables
+from app.api import router as api_router
+from app.ui import router as ui_router
+from app.middleware import setup_middleware, limiter
 from app.config import settings
 
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for startup and shutdown events
+    """
+    # Startup
+    logger.info("Starting application...")
+    logger.info(f"Application: {settings.app_name}")
+
+    # Create database tables
+    logger.info("Creating database tables...")
+    create_db_and_tables()
+    logger.info("Database tables created successfully")
+
+    yield
+
+    # Shutdown
+    logger.info("Shutting down application...")
+
+
+# Create FastAPI application
 app = FastAPI(
-    title=settings.APP_NAME,
-    version=settings.VERSION,
-    description="AI Chatbot with Blog Management using LangChain and FastAPI"
+    title=settings.app_name,
+    description="Production-ready FastAPI authentication system with Google OAuth, role-based access control, and security features",
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Configure this for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-# Setup templates
-templates = Jinja2Templates(directory="app/templates")
+# Setup middleware
+setup_middleware(app)
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Include routers
-app.include_router(chat_router, prefix="/api/v1", tags=["chat"])
+app.include_router(api_router)
+app.include_router(ui_router)
 
-@app.get("/")
-async def root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
 
-@app.get("/api")
-async def api_root():
+# Health check endpoint with rate limiting
+@app.get("/health")
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def health_check(request: Request):
+    """Health check endpoint"""
     return {
-        "message": "AI Chatbot API is running!",
-        "version": settings.VERSION,
-        "docs": "/docs"
+        "status": "healthy",
+        "app": settings.app_name,
+        "version": "1.0.0"
     }
+
+
+# Root endpoint
+@app.get("/api")
+async def root():
+    """API root endpoint"""
+    return {
+        "message": f"Welcome to {settings.app_name} API",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level="info"
+    )
