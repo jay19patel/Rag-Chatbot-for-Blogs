@@ -34,52 +34,40 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
     Protects POST, PUT, DELETE, PATCH requests.
     """
 
-    def __init__(self, app, secret_key: str, exempt_paths: list = None):
+    def __init__(self, app, secret_key: str):
         super().__init__(app)
         self.serializer = URLSafeTimedSerializer(secret_key)
-        self.exempt_paths = exempt_paths or [
-            "/api/auth/login",
-            "/api/auth/register",
-            "/api/auth/google/callback",
-            "/api/health",
-            "/docs",
-            "/redoc",
-            "/openapi.json"
-        ]
+        self.csrf_cookie_name = "csrf_token"
+        self.csrf_header_name = "X-CSRF-Token"
+        self.csrf_token_age = 3600  # 1 hour
 
     async def dispatch(self, request: Request, call_next: Callable):
-        # Skip CSRF check for safe methods and exempt paths
-        if request.method in ["GET", "HEAD", "OPTIONS"]:
-            return await call_next(request)
+        # Apply CSRF protection only on unsafe methods
+        if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+            csrf_cookie = request.cookies.get(self.csrf_cookie_name)
+            csrf_header = request.headers.get(self.csrf_header_name)
 
-        # Check if path is exempt
-        if any(request.url.path.startswith(path) for path in self.exempt_paths):
-            return await call_next(request)
-
-        # For API endpoints (JSON), check X-CSRF-Token header
-        if request.url.path.startswith("/api"):
-            csrf_token = request.headers.get("X-CSRF-Token")
-            if not csrf_token:
+            if not csrf_cookie or not csrf_header:
                 return JSONResponse(
-                    status_code=status.HTTP_403_FORBIDDEN,
+                    status_code=403,
                     content={"detail": "CSRF token missing"}
                 )
 
             try:
-                # Verify token (with 1 hour expiry)
-                self.serializer.loads(csrf_token, max_age=3600)
+                token_data = self.serializer.loads(csrf_header, max_age=self.csrf_token_age)
+                if token_data != csrf_cookie:
+                    return JSONResponse(
+                        status_code=403,
+                        content={"detail": "Invalid CSRF token"}
+                    )
             except (BadSignature, SignatureExpired):
                 return JSONResponse(
-                    status_code=status.HTTP_403_FORBIDDEN,
+                    status_code=403,
                     content={"detail": "Invalid or expired CSRF token"}
                 )
 
         response = await call_next(request)
         return response
-
-    def generate_csrf_token(self) -> str:
-        """Generate a new CSRF token"""
-        return self.serializer.dumps("csrf_token")
 
 
 # ============================================================================
@@ -170,12 +158,5 @@ def setup_middleware(app):
     app.add_middleware(SlowAPIMiddleware)
 
     # CSRF Protection (add last so it runs first in the chain)
-    csrf_middleware = CSRFProtectionMiddleware(app, secret_key=settings.csrf_secret_key)
-    app.add_middleware(
-        lambda app: csrf_middleware.__class__(
-            app,
-            secret_key=settings.csrf_secret_key
-        )
-    )
+    app.add_middleware(CSRFProtectionMiddleware, secret_key=settings.csrf_secret_key)
 
-    return csrf_middleware

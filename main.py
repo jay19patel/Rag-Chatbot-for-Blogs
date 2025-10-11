@@ -4,10 +4,12 @@ from contextlib import asynccontextmanager
 import logging
 
 from app.database import create_db_and_tables
-from app.api import router as api_router
-from app.ui import router as ui_router
-from app.middleware import setup_middleware, limiter
+from app.routes.api import router as api_router
+from app.routes.ui import router as ui_router
+from app.utility.middleware import setup_middleware, limiter
 from app.config import settings
+# Import models to ensure they are registered with SQLModel
+from app.models_schema import User, UserSession
 
 
 # Configure logging

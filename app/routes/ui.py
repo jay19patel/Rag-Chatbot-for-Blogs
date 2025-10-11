@@ -3,8 +3,8 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from typing import Optional
 
-from app.dependencies import get_optional_user, get_current_user
-from app.models import User
+from app.utility.dependencies import get_optional_user, get_current_user
+from app.models_schema import User
 from app.config import settings
 
 
@@ -83,3 +83,4 @@ async def profile_page(
             "user": user
         }
     )
+

@@ -44,3 +44,4 @@ class UserSession(SQLModel, table=True):
 
     # Relationships
     user: User = Relationship(back_populates="sessions")
+

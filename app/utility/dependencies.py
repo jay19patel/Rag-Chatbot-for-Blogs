@@ -3,8 +3,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlmodel import Session, select
 from typing import Optional
 from app.database import get_session
-from app.models import User, UserSession, UserRole
-from app.security import decode_access_token
+from app.models_schema import User, UserSession, UserRole
+from app.auth import decode_access_token
 from datetime import datetime
 
 
@@ -112,3 +112,4 @@ async def get_optional_user(
         return user if user and user.is_active else None
     except:
         return None
+

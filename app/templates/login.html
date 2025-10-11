@@ -135,6 +135,7 @@
         try {
             const response = await fetch('/api/auth/login', {
                 method: 'POST',
+                credentials: "include",
                 headers: {
                     'Content-Type': 'application/json',
                 },
@@ -144,7 +145,10 @@
             const data = await response.json();
 
             if (response.ok) {
-                // Login successful
+                // Login successful - store CSRF token from response
+                if (data.csrf_token) {
+                    localStorage.setItem("csrf_token", data.csrf_token);
+                }
                 window.location.href = '/profile';
             } else {
                 // Show error

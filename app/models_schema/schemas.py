@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional
 from datetime import datetime
-from app.models import UserRole
+from .models import UserRole
 
 
 # User Schemas
@@ -11,6 +11,7 @@ class UserRegister(BaseModel):
     username: str = Field(min_length=3, max_length=100)
     password: str = Field(min_length=8, max_length=100)
     full_name: Optional[str] = Field(default=None, max_length=255)
+    role: Optional[UserRole] = Field(default=UserRole.USER)
 
     @field_validator('username')
     @classmethod
@@ -51,6 +52,7 @@ class Token(BaseModel):
     """Schema for authentication token"""
     access_token: str
     token_type: str = "bearer"
+    csrf_token: Optional[str] = None
 
 
 class TokenData(BaseModel):
@@ -65,3 +67,4 @@ class MessageResponse(BaseModel):
     """Generic message response"""
     message: str
     status: str = "success"
+

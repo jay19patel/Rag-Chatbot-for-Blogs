@@ -4,18 +4,19 @@ from datetime import datetime, timedelta
 from typing import Optional
 from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config
+from itsdangerous import URLSafeTimedSerializer
 
 from app.database import get_session
-from app.models import User, UserSession, UserRole
-from app.schemas import (
+from app.models_schema import (
+    User, UserSession, UserRole,
     UserRegister, UserLogin, UserResponse, UserUpdate,
     Token, MessageResponse
 )
-from app.security import (
+from app.auth import (
     verify_password, get_password_hash, create_access_token,
     generate_session_token
 )
-from app.dependencies import get_current_user, get_current_active_user
+from app.utility.dependencies import get_current_user, get_current_active_user
 from app.config import settings
 
 
@@ -34,6 +35,40 @@ oauth.register(
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={'scope': 'openid email profile'}
 )
+
+# CSRF token serializer
+csrf_serializer = URLSafeTimedSerializer(settings.csrf_secret_key)
+
+
+def generate_csrf_token() -> tuple[str, str]:
+    """Generate a new CSRF token pair (raw_token, signed_token)"""
+    import secrets
+    raw_token = secrets.token_hex(16)
+    signed_token = csrf_serializer.dumps(raw_token)
+    return raw_token, signed_token
+
+
+# ============================================================================
+# CSRF Token Endpoint
+# ============================================================================
+
+@router.get("/auth/csrf-token")
+async def get_csrf_token(response: Response):
+    """Get a CSRF token for authentication"""
+    raw_token, signed_token = generate_csrf_token()
+    
+    # Set raw token in cookie
+    response.set_cookie(
+        key="csrf_token",
+        value=raw_token,
+        httponly=False,  # Allow JavaScript to access it if needed
+        secure=False,  # Set to True in production with HTTPS
+        samesite="strict",
+        max_age=3600  # 1 hour
+    )
+    
+    # Return signed token to be used in headers
+    return {"csrf_token": signed_token}
 
 
 # ============================================================================
@@ -71,7 +106,7 @@ async def register(
         username=user_data.username,
         hashed_password=hashed_password,
         full_name=user_data.full_name,
-        role=UserRole.USER
+        role=user_data.role if user_data.role else UserRole.USER
     )
 
     db.add(new_user)
@@ -145,8 +180,19 @@ async def login(
         samesite="lax",
         max_age=settings.access_token_expire_minutes * 60
     )
+    
+    # Generate and set CSRF token
+    raw_token, signed_token = generate_csrf_token()
+    response.set_cookie(
+        key="csrf_token",
+        value=raw_token,
+        httponly=False,  # Allow JavaScript to access it if needed
+        secure=False,  # Set to True in production with HTTPS
+        samesite="strict",
+        max_age=3600  # 1 hour
+    )
 
-    return Token(access_token=access_token)
+    return Token(access_token=access_token, csrf_token=signed_token)
 
 
 @router.post("/auth/logout", response_model=MessageResponse)
@@ -168,6 +214,9 @@ async def logout(
 
     # Clear session cookie
     response.delete_cookie("session_token")
+    
+    # Clear CSRF token cookie
+    response.delete_cookie("csrf_token")
 
     return MessageResponse(message="Logged out successfully")
 
@@ -280,6 +329,17 @@ async def google_callback(
             samesite="lax",
             max_age=settings.access_token_expire_minutes * 60
         )
+        
+        # Generate and set CSRF token
+        raw_token, signed_token = generate_csrf_token()
+        redirect_response.set_cookie(
+            key="csrf_token",
+            value=raw_token,
+            httponly=False,  # Allow JavaScript to access it if needed
+            secure=False,  # Set to True in production with HTTPS
+            samesite="strict",
+            max_age=3600  # 1 hour
+        )
 
         return redirect_response
 
@@ -336,3 +396,4 @@ async def update_user_profile(
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+

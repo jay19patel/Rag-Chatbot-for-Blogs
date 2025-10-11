@@ -4,7 +4,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from passlib.hash import argon2
 from app.config import settings
-from app.schemas import TokenData
+from app.models_schema.schemas import TokenData
 import secrets
 
 
@@ -66,3 +66,4 @@ def generate_session_token() -> str:
 def generate_csrf_token() -> str:
     """Generate a CSRF token"""
     return secrets.token_urlsafe(32)
+
