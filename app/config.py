@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     # Security
     csrf_secret_key: str
+    session_secret_key: str
 
     # Rate Limiting
     rate_limit_per_minute: int = 60

@@ -2,6 +2,7 @@ from fastapi import Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -159,4 +160,14 @@ def setup_middleware(app):
 
     # CSRF Protection (add last so it runs first in the chain)
     app.add_middleware(CSRFProtectionMiddleware, secret_key=settings.csrf_secret_key)
+
+    # Session Middleware (required for OAuth) - add last so it runs first
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=settings.session_secret_key,
+        session_cookie="oauth_session",
+        max_age=1800,  # 30 minutes
+        same_site="lax",
+        https_only=False  # Set to True in production with HTTPS
+    )
 
