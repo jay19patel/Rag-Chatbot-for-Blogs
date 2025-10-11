@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlmodel import Session, select
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config
 from itsdangerous import URLSafeTimedSerializer
@@ -18,6 +18,7 @@ from app.auth import (
 )
 from app.utility.dependencies import get_current_user, get_current_active_user
 from app.config import settings
+from app.repository import UserRepository, SessionRepository
 
 
 router = APIRouter(prefix="/api", tags=["API"])
@@ -38,6 +39,20 @@ oauth.register(
 
 # CSRF token serializer
 csrf_serializer = URLSafeTimedSerializer(settings.csrf_secret_key)
+
+
+# ============================================================================
+# Repository Dependencies
+# ============================================================================
+
+def get_user_repository(db: Session = Depends(get_session)) -> UserRepository:
+    """Get UserRepository instance"""
+    return UserRepository(db)
+
+
+def get_session_repository(db: Session = Depends(get_session)) -> SessionRepository:
+    """Get SessionRepository instance"""
+    return SessionRepository(db)
 
 
 def generate_csrf_token() -> tuple[str, str]:
@@ -78,26 +93,21 @@ async def get_csrf_token(response: Response):
 @router.post("/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserRegister,
-    db: Session = Depends(get_session)
+    user_repo: UserRepository = Depends(get_user_repository)
 ):
     """Register a new user"""
     # Check if user already exists
-    statement = select(User).where(
-        (User.email == user_data.email) | (User.username == user_data.username)
-    )
-    existing_user = db.exec(statement).first()
-
-    if existing_user:
-        if existing_user.email == user_data.email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already taken"
-            )
+    if user_repo.is_email_taken(user_data.email):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    if user_repo.is_username_taken(user_data.username):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already taken"
+        )
 
     # Create new user
     hashed_password = get_password_hash(user_data.password)
@@ -109,11 +119,7 @@ async def register(
         role=user_data.role if user_data.role else UserRole.USER
     )
 
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-
-    return new_user
+    return user_repo.create(new_user)
 
 
 @router.post("/auth/login", response_model=Token)
@@ -121,12 +127,12 @@ async def login(
     response: Response,
     request: Request,
     credentials: UserLogin,
-    db: Session = Depends(get_session)
+    user_repo: UserRepository = Depends(get_user_repository),
+    session_repo: SessionRepository = Depends(get_session_repository)
 ):
     """Login with email and password"""
     # Find user by email
-    statement = select(User).where(User.email == credentials.email)
-    user = db.exec(statement).first()
+    user = user_repo.get_by_email(credentials.email)
 
     if not user or not user.hashed_password:
         raise HTTPException(
@@ -160,7 +166,7 @@ async def login(
     session_token = generate_session_token()
     expires_at = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
 
-    user_session = UserSession(
+    session_repo.create_session(
         user_id=user.id,
         session_token=session_token,
         expires_at=expires_at,
@@ -168,8 +174,8 @@ async def login(
         user_agent=request.headers.get("user-agent")
     )
 
-    db.add(user_session)
-    db.commit()
+    # Update last login
+    user_repo.update_last_login(user.id)
 
     # Set session cookie
     response.set_cookie(
@@ -200,17 +206,11 @@ async def logout(
     response: Response,
     current_user: User = Depends(get_current_user),
     session_token: Optional[str] = None,
-    db: Session = Depends(get_session)
+    session_repo: SessionRepository = Depends(get_session_repository)
 ):
     """Logout user and invalidate session"""
     # Delete all user sessions
-    statement = select(UserSession).where(UserSession.user_id == current_user.id)
-    sessions = db.exec(statement).all()
-
-    for session in sessions:
-        db.delete(session)
-
-    db.commit()
+    session_repo.delete_user_sessions(current_user.id)
 
     # Clear session cookie
     response.delete_cookie("session_token")
@@ -236,7 +236,8 @@ async def google_login(request: Request):
 async def google_callback(
     request: Request,
     response: Response,
-    db: Session = Depends(get_session)
+    user_repo: UserRepository = Depends(get_user_repository),
+    session_repo: SessionRepository = Depends(get_session_repository)
 ):
     """Handle Google OAuth callback"""
     try:
@@ -254,10 +255,7 @@ async def google_callback(
         full_name = user_info.get('name')
 
         # Check if user exists
-        statement = select(User).where(
-            (User.email == email) | (User.google_id == google_id)
-        )
-        user = db.exec(statement).first()
+        user = user_repo.get_by_email(email) or user_repo.get_by_google_id(google_id)
 
         if not user:
             # Create new user
@@ -265,10 +263,7 @@ async def google_callback(
             # Ensure username is unique
             base_username = username
             counter = 1
-            while True:
-                stmt = select(User).where(User.username == username)
-                if not db.exec(stmt).first():
-                    break
+            while user_repo.is_username_taken(username):
                 username = f"{base_username}{counter}"
                 counter += 1
 
@@ -280,17 +275,13 @@ async def google_callback(
                 is_google_user=True,
                 role=UserRole.USER
             )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
+            user = user_repo.create(user)
         else:
             # Update existing user with Google info if not set
             if not user.google_id:
                 user.google_id = google_id
                 user.is_google_user = True
-                db.add(user)
-                db.commit()
-                db.refresh(user)
+                user = user_repo.update(user)
 
         # Create access token
         access_token = create_access_token(
@@ -305,7 +296,7 @@ async def google_callback(
         session_token = generate_session_token()
         expires_at = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
 
-        user_session = UserSession(
+        session_repo.create_session(
             user_id=user.id,
             session_token=session_token,
             expires_at=expires_at,
@@ -313,8 +304,8 @@ async def google_callback(
             user_agent=request.headers.get("user-agent")
         )
 
-        db.add(user_session)
-        db.commit()
+        # Update last login
+        user_repo.update_last_login(user.id)
 
         # Create redirect response
         from fastapi.responses import RedirectResponse
@@ -366,14 +357,12 @@ async def get_current_user_profile(
 async def update_user_profile(
     user_update: UserUpdate,
     current_user: User = Depends(get_current_active_user),
-    db: Session = Depends(get_session)
+    user_repo: UserRepository = Depends(get_user_repository)
 ):
     """Update current user profile"""
     # Check if username is already taken
     if user_update.username and user_update.username != current_user.username:
-        statement = select(User).where(User.username == user_update.username)
-        existing_user = db.exec(statement).first()
-        if existing_user:
+        if user_repo.is_username_taken(user_update.username, exclude_user_id=current_user.id):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Username already taken"
@@ -385,12 +374,127 @@ async def update_user_profile(
 
     current_user.updated_at = datetime.utcnow()
 
-    db.add(current_user)
-    db.commit()
-    db.refresh(current_user)
+    return user_repo.update(current_user)
 
-    return current_user
 
+# ============================================================================
+# Admin Routes
+# ============================================================================
+
+@router.get("/admin/users", response_model=List[UserResponse])
+async def get_all_users(
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(get_current_active_user),
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """Get all users (Admin only)"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    return user_repo.get_all(skip=skip, limit=limit)
+
+
+@router.get("/admin/users/stats")
+async def get_user_stats(
+    current_user: User = Depends(get_current_active_user),
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """Get user statistics (Admin only)"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    return user_repo.get_user_stats()
+
+
+@router.get("/admin/sessions/stats")
+async def get_session_stats(
+    user_id: Optional[int] = None,
+    current_user: User = Depends(get_current_active_user),
+    session_repo: SessionRepository = Depends(get_session_repository)
+):
+    """Get session statistics (Admin only)"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    return session_repo.get_session_stats(user_id)
+
+
+@router.delete("/admin/sessions/cleanup")
+async def cleanup_expired_sessions(
+    user_id: Optional[int] = None,
+    current_user: User = Depends(get_current_active_user),
+    session_repo: SessionRepository = Depends(get_session_repository)
+):
+    """Clean up expired sessions (Admin only)"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    deleted_count = session_repo.delete_expired_sessions(user_id)
+    return {"message": f"Cleaned up {deleted_count} expired sessions"}
+
+
+@router.put("/admin/users/{user_id}/activate")
+async def activate_user(
+    user_id: int,
+    current_user: User = Depends(get_current_active_user),
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """Activate user account (Admin only)"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    user = user_repo.activate_user(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return {"message": "User activated successfully"}
+
+
+@router.put("/admin/users/{user_id}/deactivate")
+async def deactivate_user(
+    user_id: int,
+    current_user: User = Depends(get_current_active_user),
+    user_repo: UserRepository = Depends(get_user_repository)
+):
+    """Deactivate user account (Admin only)"""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions"
+        )
+    
+    user = user_repo.deactivate_user(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return {"message": "User deactivated successfully"}
+
+
+# ============================================================================
+# Health Check
+# ============================================================================
 
 @router.get("/health")
 async def health_check():
