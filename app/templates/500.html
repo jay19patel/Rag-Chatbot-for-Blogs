@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}500 - Internal Server Error - {{ settings.app_name }}{% endblock %}
+
+{% block content %}
+
+<section class="min-h-[80vh] flex items-center justify-center px-4 py-20">
+    <div class="max-w-3xl mx-auto text-center">
+        <div class="space-y-8">
+            <!-- 500 Number with modern styling -->
+            <div class="text-8xl md:text-9xl font-black text-gray-200 leading-none select-none">
+                500
+            </div>
+
+            <!-- Error Message -->
+            <div class="space-y-4">
+                <h1 class="text-3xl md:text-5xl font-bold text-gray-900">
+                    Internal Server Error
+                </h1>
+
+                <p class="text-lg md:text-xl text-gray-600 max-w-xl mx-auto">
+                    Something went wrong on our end. We're working to fix it. Please try again later.
+                </p>
+            </div>
+
+            <!-- Error Icon -->
+            <div class="py-8">
+                <div class="inline-flex items-center justify-center w-24 h-24 bg-red-100 rounded-full">
+                    <svg class="w-12 h-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-col sm:flex-row gap-4 justify-center items-center pt-4">
+                <a href="/" class="bg-dark hover:bg-darker text-white px-8 py-3 rounded-lg text-base font-semibold transition-all duration-200 hover:shadow-lg inline-block">
+                    Go to Homepage
+                </a>
+                <button onclick="location.reload()" class="bg-white hover:bg-gray-50 text-dark border-2 border-gray-300 px-8 py-3 rounded-lg text-base font-semibold transition-all duration-200 hover:shadow-lg">
+                    Try Again
+                </button>
+            </div>
+
+            <!-- Help Text -->
+            <div class="pt-12 text-gray-500 text-sm">
+                <p>If this problem persists, please <a href="/contact" class="text-primary hover:underline">contact our support team</a> with details about what you were doing.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endblock %}

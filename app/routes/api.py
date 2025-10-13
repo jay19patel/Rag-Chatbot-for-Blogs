@@ -493,6 +493,200 @@ async def deactivate_user(
 
 
 # ============================================================================
+# User Search Endpoint (Mock Data)
+# ============================================================================
+
+@router.get("/users/search")
+async def search_users(
+    search: Optional[str] = None,
+    filter: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 10
+):
+    """
+    Search users with filters and pagination
+    Returns mock data for demonstration
+    """
+    # Mock data
+    mock_users = [
+        {
+            "name": "Jay Patel",
+            "skills": ["Python", "FastAPI", "React", "PostgreSQL"],
+            "address": "Mumbai, India",
+            "image": "https://i.pravatar.cc/400?img=1",
+            "role": "Admin",
+            "description": "Full-stack developer with 5 years of experience in building scalable web applications using Python and modern JavaScript frameworks.",
+            "date_of_birth": "1995-05-15"
+        },
+        {
+            "name": "Priya Sharma",
+            "skills": ["JavaScript", "Node.js", "MongoDB", "AWS"],
+            "address": "Bangalore, India",
+            "image": "https://i.pravatar.cc/400?img=5",
+            "role": "User",
+            "description": "Backend engineer specializing in microservices architecture and cloud infrastructure management.",
+            "date_of_birth": "1998-08-22"
+        },
+        {
+            "name": "Rahul Kumar",
+            "skills": ["Java", "Spring Boot", "Docker", "Kubernetes"],
+            "address": "Delhi, India",
+            "image": "https://i.pravatar.cc/400?img=12",
+            "role": "Admin",
+            "description": "DevOps expert with strong background in containerization and orchestration technologies.",
+            "date_of_birth": "1992-03-10"
+        },
+        {
+            "name": "Sneha Reddy",
+            "skills": ["UI/UX Design", "Figma", "Adobe XD", "HTML/CSS"],
+            "address": "Hyderabad, India",
+            "image": "https://i.pravatar.cc/400?img=9",
+            "role": "User",
+            "description": "Creative designer focused on creating intuitive and beautiful user experiences for web and mobile applications.",
+            "date_of_birth": "1996-11-30"
+        },
+        {
+            "name": "Amit Singh",
+            "skills": ["Python", "Machine Learning", "TensorFlow", "Data Science"],
+            "address": "Pune, India",
+            "image": "https://i.pravatar.cc/400?img=13",
+            "role": "User",
+            "description": "Data scientist with expertise in building ML models and extracting insights from complex datasets.",
+            "date_of_birth": "1994-07-18"
+        },
+        {
+            "name": "Neha Gupta",
+            "skills": ["React Native", "iOS", "Android", "Firebase"],
+            "address": "Chennai, India",
+            "image": "https://i.pravatar.cc/400?img=10",
+            "role": "User",
+            "description": "Mobile app developer creating cross-platform applications with focus on performance and user engagement.",
+            "date_of_birth": "1997-09-05"
+        },
+        {
+            "name": "Vikram Mehta",
+            "skills": ["PHP", "Laravel", "MySQL", "Vue.js"],
+            "address": "Ahmedabad, India",
+            "image": "https://i.pravatar.cc/400?img=15",
+            "role": "Admin",
+            "description": "Senior developer with extensive experience in building enterprise-level web applications.",
+            "date_of_birth": "1990-12-25"
+        },
+        {
+            "name": "Anjali Desai",
+            "skills": ["Angular", "TypeScript", "GraphQL", "RxJS"],
+            "address": "Surat, India",
+            "image": "https://i.pravatar.cc/400?img=20",
+            "role": "User",
+            "description": "Frontend specialist passionate about building reactive and scalable single-page applications.",
+            "date_of_birth": "1999-04-12"
+        },
+        {
+            "name": "Karan Joshi",
+            "skills": ["Go", "gRPC", "Redis", "Microservices"],
+            "address": "Jaipur, India",
+            "image": "https://i.pravatar.cc/400?img=33",
+            "role": "User",
+            "description": "Backend architect designing high-performance distributed systems and APIs.",
+            "date_of_birth": "1993-06-08"
+        },
+        {
+            "name": "Pooja Iyer",
+            "skills": ["QA Testing", "Selenium", "JIRA", "Automation"],
+            "address": "Kolkata, India",
+            "image": "https://i.pravatar.cc/400?img=23",
+            "role": "User",
+            "description": "Quality assurance engineer ensuring software reliability through comprehensive testing strategies.",
+            "date_of_birth": "1995-02-28"
+        },
+        {
+            "name": "Rohan Nair",
+            "skills": ["Blockchain", "Solidity", "Web3", "Ethereum"],
+            "address": "Kochi, India",
+            "image": "https://i.pravatar.cc/400?img=51",
+            "role": "Admin",
+            "description": "Blockchain developer building decentralized applications and smart contracts.",
+            "date_of_birth": "1996-10-14"
+        },
+        {
+            "name": "Divya Pillai",
+            "skills": ["Content Writing", "SEO", "Digital Marketing", "Analytics"],
+            "address": "Trivandrum, India",
+            "image": "https://i.pravatar.cc/400?img=29",
+            "role": "User",
+            "description": "Content strategist and digital marketer driving online engagement and brand visibility.",
+            "date_of_birth": "1998-01-20"
+        },
+        {
+            "name": "Arjun Rao",
+            "skills": ["C++", "Game Development", "Unity", "Unreal Engine"],
+            "address": "Mysore, India",
+            "image": "https://i.pravatar.cc/400?img=60",
+            "role": "User",
+            "description": "Game developer creating immersive gaming experiences with cutting-edge graphics and mechanics.",
+            "date_of_birth": "1994-08-03"
+        },
+        {
+            "name": "Shruti Kapoor",
+            "skills": ["Product Management", "Agile", "Scrum", "Leadership"],
+            "address": "Chandigarh, India",
+            "image": "https://i.pravatar.cc/400?img=26",
+            "role": "Admin",
+            "description": "Product manager leading cross-functional teams to deliver innovative software solutions.",
+            "date_of_birth": "1991-05-17"
+        },
+        {
+            "name": "Sanjay Verma",
+            "skills": ["Cybersecurity", "Penetration Testing", "Network Security", "Ethical Hacking"],
+            "address": "Noida, India",
+            "image": "https://i.pravatar.cc/400?img=68",
+            "role": "User",
+            "description": "Security expert protecting systems and data through comprehensive vulnerability assessments.",
+            "date_of_birth": "1992-11-09"
+        }
+    ]
+
+    # Filter by search term
+    filtered_users = mock_users
+    if search:
+        search_lower = search.lower()
+        filtered_users = [
+            user for user in filtered_users
+            if search_lower in user["name"].lower() or
+               search_lower in user["address"].lower() or
+               any(search_lower in skill.lower() for skill in user["skills"]) or
+               search_lower in user["description"].lower()
+        ]
+
+    # Filter by filter parameter
+    if filter:
+        filters = [f.strip() for f in filter.split(',') if f.strip()]
+        if filters:
+            # For simplicity, filter by skills containing filter terms
+            filtered_users = [
+                user for user in filtered_users
+                if any(
+                    any(filter_term.lower() in skill.lower() for skill in user["skills"])
+                    or filter_term.lower() in user["role"].lower()
+                    for filter_term in filters
+                )
+            ]
+
+    # Get total count
+    total = len(filtered_users)
+
+    # Apply pagination
+    paginated_users = filtered_users[skip:skip + limit]
+
+    return {
+        "users": paginated_users,
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
+
+
+# ============================================================================
 # Health Check
 # ============================================================================
 

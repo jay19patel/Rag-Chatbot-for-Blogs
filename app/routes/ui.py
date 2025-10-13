@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, Response
+from fastapi import APIRouter, Request, Depends, Response, HTTPException
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from typing import Optional
@@ -21,10 +21,15 @@ async def home(
     request: Request,
     user: Optional[User] = Depends(get_optional_user)
 ):
-    """Home page - redirects to login or profile based on auth status"""
-    if user:
-        return RedirectResponse(url="/profile", status_code=302)
-    return RedirectResponse(url="/login", status_code=302)
+    """Home page - shows welcome page for all users"""
+    return templates.TemplateResponse(
+        "home.html",
+        {
+            "request": request,
+            "settings": settings,
+            "user": user
+        }
+    )
 
 
 @router.get("/login", response_class=HTMLResponse)
@@ -83,4 +88,9 @@ async def profile_page(
             "user": user
         }
     )
+
+
+# ============================================================================
+# Error Pages (These routes are not used - errors are handled by exception handlers in main.py)
+# ============================================================================
 

@@ -3,10 +3,10 @@
 {% block title %}Profile - {{ settings.app_name }}{% endblock %}
 
 {% block content %}
-<div class="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+<div class="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
     <div class="max-w-4xl mx-auto">
         <!-- Profile Header -->
-        <div class="bg-white shadow-lg rounded-2xl overflow-hidden mb-6">
+        <div class="bg-white/90 backdrop-blur-sm shadow-lg rounded-2xl overflow-hidden mb-6 border border-purple-200/50">
             <div class="gradient-bg h-32"></div>
             <div class="px-6 pb-6">
                 <div class="flex items-center -mt-16 mb-4">
@@ -36,7 +36,7 @@
         </div>
 
         <!-- Profile Information -->
-        <div class="bg-white shadow-lg rounded-2xl p-6 mb-6">
+        <div class="bg-white/90 backdrop-blur-sm shadow-lg rounded-2xl p-6 mb-6 border border-purple-200/50">
             <h2 class="text-xl font-bold text-gray-900 mb-4">Profile Information</h2>
             <div class="space-y-4">
                 <div>
@@ -67,7 +67,7 @@
         </div>
 
         <!-- Edit Profile -->
-        <div class="bg-white shadow-lg rounded-2xl p-6">
+        <div class="bg-white/90 backdrop-blur-sm shadow-lg rounded-2xl p-6 border border-purple-200/50">
             <h2 class="text-xl font-bold text-gray-900 mb-4">Edit Profile</h2>
             <form id="updateProfileForm" class="space-y-4">
                 <div>

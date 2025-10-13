@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+
+{% block title %}Home - {{ settings.app_name }}{% endblock %}
+
+{% block content %}
+
+<!-- Hero Section with Search -->
+<section class="py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto">
+        <div class="mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
+                Discover Amazing Profiles
+            </h1>
+            <p class="text-lg text-gray-600 mb-8">
+                Search and filter through our community of talented professionals
+            </p>
+        </div>
+
+        <!-- Search Box -->
+        <div class="max-w-2xl mx-auto mb-8">
+            <div class="relative">
+                <input
+                    type="text"
+                    id="search-input"
+                    placeholder="Search by name, location, skills, or description..."
+                    class="w-full px-6 py-4 pr-12 text-base rounded-lg border-2 border-gray-300 focus:border-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900/20 transition-all duration-200 bg-white shadow-sm"
+                />
+                <button id="search-btn" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-900 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Filter Pills -->
+        <div class="max-w-4xl mx-auto">
+            <div class="flex flex-wrap justify-center gap-3">
+                <button class="pill-filter active" data-filter="all">All</button>
+                <button class="pill-filter" data-filter="python">Python</button>
+                <button class="pill-filter" data-filter="javascript">JavaScript</button>
+                <button class="pill-filter" data-filter="java">Java</button>
+                <button class="pill-filter" data-filter="react">React</button>
+                <button class="pill-filter" data-filter="node">Node.js</button>
+                <button class="pill-filter" data-filter="design">Design</button>
+                <button class="pill-filter" data-filter="admin">Admin</button>
+                <button class="pill-filter" data-filter="backend">Backend</button>
+                <button class="pill-filter" data-filter="frontend">Frontend</button>
+                <button class="pill-filter" data-filter="mobile">Mobile</button>
+                <button class="pill-filter" data-filter="devops">DevOps</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Results Section -->
+<section id="results-section" class="py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Loading State -->
+        <div id="loading" class="hidden text-center py-12">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+            <p class="mt-4 text-gray-600">Loading...</p>
+        </div>
+
+        <!-- No Data State -->
+        <div id="no-data" class="hidden text-center py-12">
+            <svg class="w-16 h-16 mx-auto text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+            </svg>
+            <p class="text-xl text-gray-600">No articles found</p>
+            <p class="text-sm text-gray-500 mt-2">Try a different search term</p>
+        </div>
+
+        <!-- Data Grid -->
+        <div id="data-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <!-- Cards will be inserted here by JavaScript -->
+        </div>
+
+        <!-- Pagination -->
+        <div id="pagination-container" class="hidden mt-12">
+            <nav class="flex justify-center items-center space-x-2">
+                <button id="prev-btn" class="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    ← Previous
+                </button>
+                <div id="page-numbers" class="flex space-x-2">
+                    <!-- Page numbers will be inserted here -->
+                </div>
+                <button id="next-btn" class="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    Next →
+                </button>
+            </nav>
+        </div>
+    </div>
+</section>
+
+<style>
+    .article-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .article-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+    }
+    .pill-filter {
+        padding: 0.5rem 1.25rem;
+        border-radius: 9999px;
+        border: 1px solid #e5e5e5;
+        background-color: white;
+        color: #333;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+    }
+    .pill-filter:hover {
+        border-color: #1a1a1a;
+        color: #1a1a1a;
+        background-color: #f9f9f9;
+    }
+    .pill-filter.active {
+        background-color: #1a1a1a;
+        color: white;
+        border-color: #1a1a1a;
+    }
+</style>
+
+<script>
+    let currentPage = 1;
+    const itemsPerPage = 9;
+    let totalItems = 0;
+    let currentSearch = '';
+    let currentFilters = [];
+    let isLoading = false;
+
+    // Get URL parameters
+    function getUrlParams() {
+        const params = new URLSearchParams(window.location.search);
+        return {
+            page: parseInt(params.get('page')) || 1,
+            search: params.get('search') || '',
+            filters: params.get('filter') ? params.get('filter').split(',') : []
+        };
+    }
+
+    // Update URL parameters
+    function updateUrlParams(page, search, filters) {
+        const params = new URLSearchParams();
+        if (page > 1) params.set('page', page);
+        if (search) params.set('search', search);
+        if (filters.length > 0) params.set('filter', filters.join(','));
+
+        const newUrl = params.toString() ? `${window.location.pathname}?${params.toString()}` : window.location.pathname;
+        window.history.pushState({}, '', newUrl);
+    }
+
+    // Create card HTML with original data structure
+    function createCard(data) {
+        const gradients = [
+            'linear-gradient(135deg, #FF6B6B 0%, #FF8E53 50%, #FF6B6B 100%)',
+            'linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #A855F7 100%)',
+            'linear-gradient(135deg, #10B981 0%, #059669 50%, #047857 100%)',
+            'linear-gradient(135deg, #F59E0B 0%, #EF4444 50%, #DC2626 100%)',
+            'linear-gradient(135deg, #3B82F6 0%, #2563EB 50%, #1D4ED8 100%)',
+            'linear-gradient(135deg, #EC4899 0%, #DB2777 50%, #BE185D 100%)'
+        ];
+        const randomGradient = gradients[Math.floor(Math.random() * gradients.length)];
+
+        return `
+            <article class="article-card bg-white rounded-lg overflow-hidden shadow-md border border-gray-200">
+                <div class="relative h-56 overflow-hidden" style="background: ${randomGradient}">
+                    <img src="${data.image || 'https://via.placeholder.com/400x300'}"
+                         alt="${data.name}"
+                         class="w-full h-full object-cover opacity-90">
+                </div>
+                <div class="p-6">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-xl font-bold text-gray-900">${data.name}</h3>
+                        <span class="px-3 py-1 text-xs font-semibold rounded-full ${data.role === 'Admin' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}">
+                            ${data.role}
+                        </span>
+                    </div>
+                    <p class="text-gray-600 text-sm mb-4 line-clamp-2">${data.description || 'No description available'}</p>
+
+                    <div class="space-y-2 text-sm text-gray-600 mb-4">
+                        <div class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            ${data.address || 'Location not specified'}
+                        </div>
+                        <div class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            ${data.date_of_birth || 'DOB not provided'}
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                        ${data.skills.slice(0, 3).map(skill => `
+                            <span class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-md">${skill}</span>
+                        `).join('')}
+                        ${data.skills.length > 3 ? `<span class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-md">+${data.skills.length - 3}</span>` : ''}
+                    </div>
+                </div>
+            </article>
+        `;
+    }
+
+    // Fetch data from API
+    async function fetchData() {
+        if (isLoading) return;
+
+        isLoading = true;
+        const loading = document.getElementById('loading');
+        const noData = document.getElementById('no-data');
+        const dataGrid = document.getElementById('data-grid');
+        const paginationContainer = document.getElementById('pagination-container');
+
+        dataGrid.innerHTML = '';
+        loading.classList.remove('hidden');
+        noData.classList.add('hidden');
+        paginationContainer.classList.add('hidden');
+
+        try {
+            const skip = (currentPage - 1) * itemsPerPage;
+            const params = new URLSearchParams({
+                skip: skip,
+                limit: itemsPerPage
+            });
+
+            if (currentSearch) params.set('search', currentSearch);
+            if (currentFilters.length > 0) params.set('filter', currentFilters.join(','));
+
+            const response = await fetch(`/api/users/search?${params.toString()}`);
+            const data = await response.json();
+
+            loading.classList.add('hidden');
+
+            if (data.users && data.users.length > 0) {
+                totalItems = data.total;
+
+                data.users.forEach(user => {
+                    dataGrid.innerHTML += createCard(user);
+                });
+
+                renderPagination();
+                paginationContainer.classList.remove('hidden');
+                noData.classList.add('hidden');
+
+                // Scroll to top of results
+                if (currentPage > 1) {
+                    document.getElementById('results-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            } else {
+                noData.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error fetching data:', error);
+            loading.classList.add('hidden');
+            noData.classList.remove('hidden');
+        }
+
+        isLoading = false;
+    }
+
+    // Render pagination
+    function renderPagination() {
+        const totalPages = Math.ceil(totalItems / itemsPerPage);
+        const pageNumbers = document.getElementById('page-numbers');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+
+        pageNumbers.innerHTML = '';
+
+        // Update prev/next buttons
+        prevBtn.disabled = currentPage === 1;
+        nextBtn.disabled = currentPage >= totalPages || totalPages === 0;
+
+        // Generate page numbers
+        const maxVisible = 7;
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+
+        if (endPage - startPage < maxVisible - 1) {
+            startPage = Math.max(1, endPage - maxVisible + 1);
+        }
+
+        // First page
+        if (startPage > 1) {
+            pageNumbers.innerHTML += createPageButton(1);
+            if (startPage > 2) {
+                pageNumbers.innerHTML += '<span class="px-2 py-2 text-gray-500">...</span>';
+            }
+        }
+
+        // Page numbers
+        for (let i = startPage; i <= endPage; i++) {
+            pageNumbers.innerHTML += createPageButton(i);
+        }
+
+        // Last page
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                pageNumbers.innerHTML += '<span class="px-2 py-2 text-gray-500">...</span>';
+            }
+            pageNumbers.innerHTML += createPageButton(totalPages);
+        }
+
+        // Add click events
+        document.querySelectorAll('.page-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                currentPage = parseInt(this.dataset.page);
+                updateUrlParams(currentPage, currentSearch, currentFilters);
+                fetchData();
+            });
+        });
+    }
+
+    function createPageButton(pageNum) {
+        const isActive = pageNum === currentPage;
+        return `
+            <button
+                class="page-btn px-4 py-2 border rounded-md transition-colors ${
+                    isActive
+                        ? 'bg-gray-900 text-white border-gray-900'
+                        : 'border-gray-300 hover:bg-gray-50'
+                }"
+                data-page="${pageNum}"
+            >
+                ${pageNum}
+            </button>
+        `;
+    }
+
+    // Initialize from URL params
+    function initializeFromUrl() {
+        const params = getUrlParams();
+        currentPage = params.page;
+        currentSearch = params.search;
+        currentFilters = params.filters;
+
+        // Update search input
+        const searchInput = document.getElementById('search-input');
+        if (searchInput && currentSearch) {
+            searchInput.value = currentSearch;
+        }
+
+        // Update pill filters
+        document.querySelectorAll('.pill-filter').forEach(btn => {
+            const filterValue = btn.getAttribute('data-filter');
+            if (currentFilters.includes(filterValue)) {
+                btn.classList.add('active');
+            } else if (filterValue === 'all' && currentFilters.length === 0) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        // Fetch data
+        fetchData();
+    }
+
+    // Filter pill functionality
+    document.querySelectorAll('.pill-filter').forEach(button => {
+        button.addEventListener('click', function() {
+            const filter = this.getAttribute('data-filter');
+
+            if (filter === 'all') {
+                // Clear all filters
+                document.querySelectorAll('.pill-filter').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                this.classList.add('active');
+                currentFilters = [];
+            } else {
+                // Remove "All" filter if present
+                const allBtn = document.querySelector('.pill-filter[data-filter="all"]');
+                if (allBtn) allBtn.classList.remove('active');
+
+                // Toggle this filter
+                if (this.classList.contains('active')) {
+                    this.classList.remove('active');
+                    currentFilters = currentFilters.filter(f => f !== filter);
+                } else {
+                    this.classList.add('active');
+                    currentFilters.push(filter);
+                }
+
+                // If no filters selected, activate "All"
+                if (currentFilters.length === 0 && allBtn) {
+                    allBtn.classList.add('active');
+                }
+            }
+
+            currentPage = 1; // Reset to page 1 when filtering
+            updateUrlParams(currentPage, currentSearch, currentFilters);
+            fetchData();
+        });
+    });
+
+    // Search functionality
+    const searchInput = document.getElementById('search-input');
+    const searchBtn = document.getElementById('search-btn');
+
+    function performSearch() {
+        currentSearch = searchInput.value.trim();
+        currentPage = 1; // Reset to page 1 when searching
+        updateUrlParams(currentPage, currentSearch, currentFilters);
+        fetchData();
+    }
+
+    if (searchInput) {
+        // Search on Enter key
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+    }
+
+    if (searchBtn) {
+        // Search on button click
+        searchBtn.addEventListener('click', performSearch);
+    }
+
+    // Pagination button handlers
+    document.getElementById('prev-btn').addEventListener('click', function() {
+        if (currentPage > 1) {
+            currentPage--;
+            updateUrlParams(currentPage, currentSearch, currentFilters);
+            fetchData();
+        }
+    });
+
+    document.getElementById('next-btn').addEventListener('click', function() {
+        const totalPages = Math.ceil(totalItems / itemsPerPage);
+        if (currentPage < totalPages) {
+            currentPage++;
+            updateUrlParams(currentPage, currentSearch, currentFilters);
+            fetchData();
+        }
+    });
+
+    // Initialize on page load
+    initializeFromUrl();
+</script>
+
+{% endblock %}
