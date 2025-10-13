@@ -93,6 +93,40 @@
     </div>
 </section>
 
+
+
+
+<!-- Testimonials Section -->
+<section id="testimonials-section" class="py-16 px-4 sm:px-6 lg:px-8 bg-white">
+    <div class="max-w-7xl mx-auto">
+        <div class="mb-10 text-center">
+            <h2 class="text-3xl md:text-4xl font-bold text-gray-900">What People Say</h2>
+            <p class="text-gray-600 mt-2">Real feedback from our amazing community</p>
+        </div>
+
+        <div id="testimonials-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Testimonial cards will be inserted here -->
+        </div>
+    </div>
+</section>
+
+<!-- FAQ Section -->
+<section id="faq-section" class="py-16 px-4 sm:px-6 lg:px-8 bg-gray-50">
+    <div class="max-w-4xl mx-auto">
+        <div class="mb-10 text-center">
+            <h2 class="text-3xl md:text-4xl font-bold text-gray-900">Frequently Asked Questions</h2>
+            <p class="text-gray-600 mt-2">Answers to common questions</p>
+        </div>
+
+        <div id="faq-list" class="space-y-4">
+            <!-- FAQ items will be inserted here -->
+        </div>
+    </div>
+</section>
+
+
+
+
 <style>
     .article-card {
         transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -447,6 +481,75 @@
 
     // Initialize on page load
     initializeFromUrl();
+
+    // Fetch and render testimonials
+    async function loadTestimonials() {
+        try {
+            const res = await fetch('/api/content/testimonials');
+            const data = await res.json();
+            const grid = document.getElementById('testimonials-grid');
+            if (!grid) return;
+
+            grid.innerHTML = (data.testimonials || []).map(t => `
+                <div class="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
+                    <div class="flex items-center mb-4">
+                        <img src="${t.avatar}" alt="${t.name}" class="w-12 h-12 rounded-full mr-4">
+                        <div>
+                            <div class="font-semibold text-gray-900">${t.name}</div>
+                            <div class="text-sm text-gray-500">${t.title} • ${t.company}</div>
+                        </div>
+                    </div>
+                    <p class="text-gray-700">“${t.quote}”</p>
+                </div>
+            `).join('');
+        } catch (e) {
+            console.error('Failed to load testimonials', e);
+        }
+    }
+
+    // Fetch and render FAQs
+    async function loadFaqs() {
+        try {
+            const res = await fetch('/api/content/faqs');
+            const data = await res.json();
+            const list = document.getElementById('faq-list');
+            if (!list) return;
+
+            list.innerHTML = (data.faqs || []).map((f, idx) => `
+                <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                    <button class="w-full text-left px-5 py-4 flex justify-between items-center hover:bg-gray-50 faq-toggle" data-target="faq-${idx}">
+                        <span class="font-medium text-gray-900">${f.question}</span>
+                        <svg class="w-5 h-5 text-gray-500 transition-transform" data-icon-for="faq-${idx}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    <div id="faq-${idx}" class="px-5 pb-4 hidden">
+                        <p class="text-gray-700">${f.answer}</p>
+                    </div>
+                </div>
+            `).join('');
+
+            // Wire up accordion behavior
+            document.querySelectorAll('.faq-toggle').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const targetId = this.getAttribute('data-target');
+                    const panel = document.getElementById(targetId);
+                    const icon = document.querySelector(`[data-icon-for="${targetId}"]`);
+                    if (panel) {
+                        const isHidden = panel.classList.contains('hidden');
+                        panel.classList.toggle('hidden');
+                        if (icon) {
+                            icon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+                        }
+                    }
+                });
+            });
+        } catch (e) {
+            console.error('Failed to load FAQs', e);
+        }
+    }
+
+    // Load content sections
+    loadTestimonials();
+    loadFaqs();
 </script>
 
 {% endblock %}

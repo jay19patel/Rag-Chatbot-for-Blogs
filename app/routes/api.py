@@ -695,3 +695,58 @@ async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
+
+# ============================================================================
+# Public Content: Testimonials & FAQs
+# ============================================================================
+
+@router.get("/content/testimonials")
+async def get_testimonials():
+    """Return a list of testimonials (public)."""
+    return {
+        "testimonials": [
+            {
+                "name": "Aisha Khan",
+                "title": "Product Manager",
+                "company": "Nimbus Tech",
+                "avatar": "https://i.pravatar.cc/150?img=32",
+                "quote": "This platform made it effortless to find top talent. The search and filtering are spot on!"
+            },
+            {
+                "name": "Rohit Verma",
+                "title": "Senior Developer",
+                "company": "CoreStack",
+                "avatar": "https://i.pravatar.cc/150?img=14",
+                "quote": "The UX is clean, fast, and the profiles are rich with just the right info. Loved it."
+            },
+            {
+                "name": "Neha Patel",
+                "title": "UI/UX Designer",
+                "company": "DesignForge",
+                "avatar": "https://i.pravatar.cc/150?img=47",
+                "quote": "Beautifully designed and a joy to use. I found collaborators in minutes!"
+            }
+        ]
+    }
+
+
+@router.get("/content/faqs")
+async def get_faqs():
+    """Return a list of FAQs (public)."""
+    return {
+        "faqs": [
+            {
+                "question": "How do I create an account?",
+                "answer": "Click on Register, fill in your details, and verify your email to get started."
+            },
+            {
+                "question": "Is my data secure?",
+                "answer": "We use industry-standard security practices including hashed passwords and secure sessions."
+            },
+            {
+                "question": "How can I contact support?",
+                "answer": "Reach out via the Contact page or email support@example.com. We usually respond within 24 hours."
+            }
+        ]
+    }
+
