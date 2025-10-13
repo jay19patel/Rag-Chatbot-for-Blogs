@@ -61,104 +61,22 @@
     {% include 'toast.html' %}
     
 
-    <script>
-        // Get CSRF token from localStorage
-        async function getCsrfToken() {
-            const storedToken = localStorage.getItem("csrf_token");
-            if (storedToken) {
-                return storedToken;
-            }
-            
-            // If not in localStorage, fetch from server
-            try {
-                const response = await fetch('/api/auth/csrf-token', { 
-                    credentials: "include" 
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    localStorage.setItem("csrf_token", data.csrf_token);
-                    return data.csrf_token;
-                }
-            } catch (error) {
-                console.error('Failed to fetch CSRF token:', error);
-            }
-            return null;
-        }
-
-        // Ensure CSRF token is available
-        async function ensureCsrfToken() {
-            return await getCsrfToken();
-        }
-        
-        // Initialize CSRF token on page load if user is logged in
-        {% if user %}
-        (async function() {
-            await getCsrfToken();
-        })();
-        {% endif %}
-
-        // Toast notification functions
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            const toastMessage = document.getElementById('toast-message');
-            const toastIcon = toast.querySelector('svg');
-            const toastBorder = toast.querySelector('div');
-
-            toastMessage.textContent = message;
-
-            if (type === 'error') {
-                toastBorder.className = 'bg-white border-l-4 border-red-500 rounded-lg shadow-lg p-4 max-w-md';
-                toastIcon.className = 'h-5 w-5 text-red-500';
-            } else {
-                toastBorder.className = 'bg-white border-l-4 border-green-500 rounded-lg shadow-lg p-4 max-w-md';
-                toastIcon.className = 'h-5 w-5 text-green-500';
-            }
-
-            toast.classList.remove('hidden');
-            setTimeout(hideToast, 5000);
-        }
-
-        function hideToast() {
-            document.getElementById('toast').classList.add('hidden');
-        }
-
-        // Logout function
-        async function logout() {
-            try {
-                // Get CSRF token
-                const csrfToken = await ensureCsrfToken();
-                
-                const headers = {
-                    'Content-Type': 'application/json'
-                };
-                
-                if (csrfToken) {
-                    headers['X-CSRF-Token'] = csrfToken;
-                }
-
-                const response = await fetch('/api/auth/logout', {
-                    method: 'POST',
-                    headers: headers,
-                    credentials: "include"
-                });
-
-                if (response.ok) {
-                    // Clear CSRF token from localStorage
-                    localStorage.removeItem("csrf_token");
-                    window.location.href = '/login';
-                } else {
-                    const data = await response.json();
-                    showToast(data.detail || 'Logout failed', 'error');
-                }
-            } catch (error) {
-                console.error('Logout error:', error);
-                showToast('Logout failed', 'error');
-            }
-        }
-    </script>
-
-    <!-- Custom JavaScript -->
+    <!-- Custom JavaScript - Load first so functions are available -->
     <script src="/static/js/main.js"></script>
+
+    <script>
+        // Initialize CSRF token on page load if user is logged in
+        // {% if user %}
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                await window.AppUtils.getCsrfToken();
+                console.log('CSRF token initialized');
+            } catch (error) {
+                console.error('Failed to initialize CSRF token:', error);
+            }
+        });
+        // {% endif %}
+    </script>
     
     {% block extra_scripts %}{% endblock %}
 </body>

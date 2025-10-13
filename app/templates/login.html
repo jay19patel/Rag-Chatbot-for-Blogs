@@ -172,9 +172,8 @@
         submitBtn.textContent = 'Signing in...';
 
         try {
-            const response = await fetch('/api/auth/login', {
+            const response = await window.AppUtils.csrfFetch('/api/auth/login', {
                 method: 'POST',
-                credentials: "include",
                 headers: {
                     'Content-Type': 'application/json',
                 },

@@ -148,12 +148,12 @@
 
         try {
             // Get CSRF token
-            const csrfToken = await ensureCsrfToken();
-            
+            const csrfToken = await window.AppUtils.ensureCsrfToken();
+
             const headers = {
                 'Content-Type': 'application/json'
             };
-            
+
             if (csrfToken) {
                 headers['X-CSRF-Token'] = csrfToken;
             }
@@ -172,7 +172,7 @@
 
             if (response.ok) {
                 // Update successful
-                showToast('Profile updated successfully!', 'success');
+                window.AppUtils.showToast('Profile updated successfully!', 'success');
 
                 // Reload page after a short delay to show updated info
                 setTimeout(() => {
@@ -197,7 +197,7 @@
     // Check for registration success message
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('registered') === 'true') {
-        showToast('Account created successfully! Please log in.', 'success');
+        window.AppUtils.showToast('Account created successfully! Please log in.', 'success');
     }
 </script>
 {% endblock %}

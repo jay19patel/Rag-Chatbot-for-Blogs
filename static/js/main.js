@@ -1,15 +1,31 @@
 // Main JavaScript file for the application
-
+console.log('Main JavaScript file loaded');
 // CSRF Token Management
-async function getCsrfToken() {
-    const storedToken = localStorage.getItem("csrf_token");
-    if (storedToken) {
-        return storedToken;
+function readCookie(name) {
+    const nameEQ = name + "=";
+    const parts = document.cookie.split(';');
+    for (let i = 0; i < parts.length; i++) {
+        let c = parts[i];
+        while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
     }
-    
+    return null;
+}
+
+async function getCsrfToken() {
+    console.log('Getting CSRF token');
+    const storedSignedToken = localStorage.getItem("csrf_token");
+    const csrfCookie = readCookie("csrf_token");
+
+    // If we have both a signed token and the raw cookie, reuse the signed token
+    if (storedSignedToken && csrfCookie) {
+        return storedSignedToken;
+    }
+
+    // Otherwise, fetch a fresh token/cookie pair
     try {
-        const response = await fetch('/api/auth/csrf-token', { 
-            credentials: "include" 
+        const response = await fetch('/api/auth/csrf-token', {
+            credentials: "include"
         });
         if (response.ok) {
             const data = await response.json();
@@ -25,6 +41,29 @@ async function getCsrfToken() {
 // Ensure CSRF token is available
 async function ensureCsrfToken() {
     return await getCsrfToken();
+}
+
+// Wrapper around fetch to automatically include CSRF token and credentials
+async function csrfFetch(url, options = {}) {
+    const opts = { ...options };
+    // Always include credentials so cookies are sent
+    if (!opts.credentials) {
+        opts.credentials = 'include';
+    }
+    // For unsafe methods, attach the CSRF header
+    const method = (opts.method || 'GET').toUpperCase();
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+        const csrfToken = await getCsrfToken();
+        opts.headers = { ...(opts.headers || {}) };
+        if (csrfToken) {
+            opts.headers['X-CSRF-Token'] = csrfToken;
+        }
+        // Default content-type for JSON if body is an object and header not set
+        if (opts.body && !(opts.body instanceof FormData) && !opts.headers['Content-Type']) {
+            opts.headers['Content-Type'] = 'application/json';
+        }
+    }
+    return fetch(url, opts);
 }
 
 // Toast Notification System
@@ -58,20 +97,8 @@ function hideToast() {
 // Logout Function
 async function logout() {
     try {
-        const csrfToken = await ensureCsrfToken();
-        
-        const headers = {
-            'Content-Type': 'application/json'
-        };
-        
-        if (csrfToken) {
-            headers['X-CSRF-Token'] = csrfToken;
-        }
-
-        const response = await fetch('/api/auth/logout', {
-            method: 'POST',
-            headers: headers,
-            credentials: "include"
+        const response = await csrfFetch('/api/auth/logout', {
+            method: 'POST'
         });
 
         if (response.ok) {
@@ -165,6 +192,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize CSRF token if user is logged in
     const userElement = document.querySelector('[data-user]');
     if (userElement) {
+        console.log('Initializing CSRF token');
         getCsrfToken();
     }
 });
@@ -206,6 +234,7 @@ function handleFormSubmission(formId, submitCallback) {
 window.AppUtils = {
     getCsrfToken,
     ensureCsrfToken,
+    csrfFetch,
     showToast,
     hideToast,
     logout,

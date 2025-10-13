@@ -3,8 +3,8 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from typing import Optional
 
-from app.utility.dependencies import get_optional_user, get_current_user
-from app.models_schema import User
+from app.utility.dependencies import get_optional_user, get_current_user, get_admin_user
+from app.models_schema import User, UserRole
 from app.config import settings
 
 
@@ -82,6 +82,22 @@ async def profile_page(
     """User profile page (protected)"""
     return templates.TemplateResponse(
         "profile.html",
+        {
+            "request": request,
+            "settings": settings,
+            "user": user
+        }
+    )
+
+
+@router.get("/admin/users", response_class=HTMLResponse)
+async def admin_users_page(
+    request: Request,
+    user: User = Depends(get_admin_user)
+):
+    """Admin users list page (admin only)"""
+    return templates.TemplateResponse(
+        "admin_users.html",
         {
             "request": request,
             "settings": settings,

@@ -23,6 +23,11 @@
                         <a href="/profile" class="text-gray-300 hover:text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200">
                             Profile
                         </a>
+                        {% if user.role.value == 'Admin' %}
+                        <a href="/admin/users" class="text-gray-300 hover:text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-gray-800/50 transition-all duration-200">
+                            Admin Panel
+                        </a>
+                        {% endif %}
                         <button onclick="logout()" class="bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border border-red-500/20">
                             Logout
                         </button>
@@ -62,6 +67,11 @@
                         <a href="/profile" class="block text-gray-300 hover:text-white px-3 py-2 rounded-lg font-medium hover:bg-gray-800/50 transition-all duration-200">
                             Profile
                         </a>
+                        {% if user.role.value == 'Admin' %}
+                        <a href="/admin/users" class="block text-gray-300 hover:text-white px-3 py-2 rounded-lg font-medium hover:bg-gray-800/50 transition-all duration-200">
+                            Admin Panel
+                        </a>
+                        {% endif %}
                         <button onclick="logout()" class="w-full text-left bg-red-500/10 hover:bg-red-500/20 text-red-400 px-3 py-2 rounded-lg font-medium transition-all duration-200 mt-2">
                             Logout
                         </button>
@@ -84,11 +94,23 @@
 
 <script>
     // Mobile menu toggle
-    const mobileMenuButton = document.getElementById('mobile-menu-button');
-    if (mobileMenuButton) {
-        mobileMenuButton.addEventListener('click', function() {
-            const mobileMenu = document.getElementById('mobile-menu');
-            mobileMenu.classList.toggle('hidden');
-        });
+    document.addEventListener('DOMContentLoaded', function() {
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        if (mobileMenuButton) {
+            mobileMenuButton.addEventListener('click', function() {
+                const mobileMenu = document.getElementById('mobile-menu');
+                mobileMenu.classList.toggle('hidden');
+            });
+        }
+    });
+
+    // Logout function using AppUtils from main.js
+    async function logout() {
+        if (window.AppUtils && window.AppUtils.logout) {
+            await window.AppUtils.logout();
+        } else {
+            console.error('AppUtils not loaded');
+            window.location.href = '/login';
+        }
     }
 </script>

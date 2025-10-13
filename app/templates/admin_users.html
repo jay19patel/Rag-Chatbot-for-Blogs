@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - User Management - {{ settings.app_name }}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-4xl font-bold text-gray-900 mb-2">User Management</h1>
+            <p class="text-gray-600">Manage all registered users in the system</p>
+        </div>
+
+        <!-- Stats Cards -->
+        <div id="stats-container" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- Stats will be loaded here -->
+        </div>
+
+        <!-- Search and Filters -->
+        <div class="bg-white/90 backdrop-blur-sm shadow-lg rounded-2xl p-6 mb-6 border border-purple-200/50">
+            <div class="flex flex-col md:flex-row gap-4">
+                <div class="flex-1">
+                    <input
+                        type="text"
+                        id="search-input"
+                        placeholder="Search by name, email, or username..."
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                </div>
+                <div>
+                    <select id="role-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">
+                        <option value="">All Roles</option>
+                        <option value="Admin">Admin</option>
+                        <option value="User">User</option>
+                    </select>
+                </div>
+                <div>
+                    <select id="status-filter" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="hidden text-center py-12">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+            <p class="mt-4 text-gray-600">Loading users...</p>
+        </div>
+
+        <!-- Users Table -->
+        <div id="users-container" class="bg-white/90 backdrop-blur-sm shadow-lg rounded-2xl overflow-hidden border border-purple-200/50">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="users-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Users will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div id="pagination-container" class="hidden px-6 py-4 bg-gray-50 border-t border-gray-200">
+                <nav class="flex justify-between items-center">
+                    <div class="text-sm text-gray-700">
+                        Showing <span id="showing-from">0</span> to <span id="showing-to">0</span> of <span id="total-users">0</span> users
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="prev-btn" class="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            ← Previous
+                        </button>
+                        <div id="page-numbers" class="flex space-x-2">
+                            <!-- Page numbers will be inserted here -->
+                        </div>
+                        <button id="next-btn" class="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            Next →
+                        </button>
+                    </div>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let currentPage = 1;
+    const itemsPerPage = 10;
+    let totalUsers = 0;
+    let currentSearch = '';
+    let roleFilter = '';
+    let statusFilter = '';
+    let isLoading = false;
+    let allUsers = [];
+
+    // Fetch user statistics
+    async function fetchUserStats() {
+        try {
+            const csrfToken = await window.AppUtils.ensureCsrfToken();
+            const headers = { 'Content-Type': 'application/json' };
+            if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+
+            const response = await fetch('/api/admin/users/stats', {
+                headers: headers,
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                const stats = await response.json();
+                displayStats(stats);
+            }
+        } catch (error) {
+            console.error('Error fetching stats:', error);
+        }
+    }
+
+    // Display statistics
+    function displayStats(stats) {
+        const statsContainer = document.getElementById('stats-container');
+        statsContainer.innerHTML = `
+            <div class="bg-white/90 backdrop-blur-sm shadow-lg rounded-xl p-6 border border-purple-200/50">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Total Users</p>
+                        <p class="text-3xl font-bold text-gray-900">${stats.total_users || 0}</p>
+                    </div>
+                    <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white/90 backdrop-blur-sm shadow-lg rounded-xl p-6 border border-green-200/50">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Active Users</p>
+                        <p class="text-3xl font-bold text-green-600">${stats.active_users || 0}</p>
+                    </div>
+                    <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white/90 backdrop-blur-sm shadow-lg rounded-xl p-6 border border-blue-200/50">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm font-medium text-gray-600">Admin Users</p>
+                        <p class="text-3xl font-bold text-blue-600">${stats.admin_users || 0}</p>
+                    </div>
+                    <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Fetch all users
+    async function fetchUsers() {
+        if (isLoading) return;
+
+        isLoading = true;
+        const loading = document.getElementById('loading');
+        const usersTableBody = document.getElementById('users-table-body');
+        const paginationContainer = document.getElementById('pagination-container');
+
+        loading.classList.remove('hidden');
+        usersTableBody.innerHTML = '';
+        paginationContainer.classList.add('hidden');
+
+        try {
+            const csrfToken = await window.AppUtils.ensureCsrfToken();
+            const headers = { 'Content-Type': 'application/json' };
+            if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+
+            const params = new URLSearchParams({
+                skip: 0,
+                limit: 1000 // Get all users for client-side filtering
+            });
+
+            const response = await fetch(`/api/admin/users?${params.toString()}`, {
+                headers: headers,
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                allUsers = await response.json();
+                filterAndDisplayUsers();
+            } else if (response.status === 403) {
+                window.AppUtils.showToast('Access denied. Admin only.', 'error');
+                setTimeout(() => window.location.href = '/profile', 2000);
+            } else {
+                throw new Error('Failed to fetch users');
+            }
+        } catch (error) {
+            console.error('Error fetching users:', error);
+            window.AppUtils.showToast('Failed to load users', 'error');
+        } finally {
+            loading.classList.add('hidden');
+            isLoading = false;
+        }
+    }
+
+    // Filter and display users
+    function filterAndDisplayUsers() {
+        let filteredUsers = [...allUsers];
+
+        // Apply search filter
+        if (currentSearch) {
+            const searchLower = currentSearch.toLowerCase();
+            filteredUsers = filteredUsers.filter(user =>
+                user.username.toLowerCase().includes(searchLower) ||
+                user.email.toLowerCase().includes(searchLower) ||
+                (user.full_name && user.full_name.toLowerCase().includes(searchLower))
+            );
+        }
+
+        // Apply role filter
+        if (roleFilter) {
+            filteredUsers = filteredUsers.filter(user => user.role === roleFilter);
+        }
+
+        // Apply status filter
+        if (statusFilter) {
+            const isActive = statusFilter === 'active';
+            filteredUsers = filteredUsers.filter(user => user.is_active === isActive);
+        }
+
+        totalUsers = filteredUsers.length;
+
+        // Paginate
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, totalUsers);
+        const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+
+        displayUsers(paginatedUsers);
+        updatePaginationInfo(startIndex, endIndex);
+        renderPagination();
+    }
+
+    // Display users in table
+    function displayUsers(users) {
+        const usersTableBody = document.getElementById('users-table-body');
+        const paginationContainer = document.getElementById('pagination-container');
+
+        if (users.length === 0) {
+            usersTableBody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="px-6 py-12 text-center text-gray-500">
+                        No users found
+                    </td>
+                </tr>
+            `;
+            paginationContainer.classList.add('hidden');
+            return;
+        }
+
+        usersTableBody.innerHTML = users.map(user => `
+            <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                            <span class="text-lg font-semibold text-purple-600">${user.username[0].toUpperCase()}</span>
+                        </div>
+                        <div class="ml-4">
+                            <div class="text-sm font-medium text-gray-900">${user.full_name || user.username}</div>
+                            <div class="text-sm text-gray-500">@${user.username}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm text-gray-900">${user.email}</div>
+                    ${user.is_google_user ? '<span class="text-xs text-green-600">Google</span>' : ''}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 py-1 text-xs font-semibold rounded-full ${user.role === 'Admin' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}">
+                        ${user.role}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 py-1 text-xs font-semibold rounded-full ${user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                        ${user.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    ${new Date(user.created_at).toLocaleDateString()}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    ${user.is_active
+                        ? `<button onclick="toggleUserStatus(${user.id}, false)" class="text-red-600 hover:text-red-900 mr-3">Deactivate</button>`
+                        : `<button onclick="toggleUserStatus(${user.id}, true)" class="text-green-600 hover:text-green-900 mr-3">Activate</button>`
+                    }
+                </td>
+            </tr>
+        `).join('');
+
+        paginationContainer.classList.remove('hidden');
+    }
+
+    // Update pagination info
+    function updatePaginationInfo(startIndex, endIndex) {
+        document.getElementById('showing-from').textContent = totalUsers > 0 ? startIndex + 1 : 0;
+        document.getElementById('showing-to').textContent = endIndex;
+        document.getElementById('total-users').textContent = totalUsers;
+    }
+
+    // Render pagination
+    function renderPagination() {
+        const totalPages = Math.ceil(totalUsers / itemsPerPage);
+        const pageNumbers = document.getElementById('page-numbers');
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+
+        prevBtn.disabled = currentPage === 1;
+        nextBtn.disabled = currentPage >= totalPages || totalPages === 0;
+
+        pageNumbers.innerHTML = '';
+
+        if (totalPages <= 1) return;
+
+        const maxVisible = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+
+        if (endPage - startPage < maxVisible - 1) {
+            startPage = Math.max(1, endPage - maxVisible + 1);
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            const isActive = i === currentPage;
+            const button = document.createElement('button');
+            button.className = `px-4 py-2 border rounded-md transition-colors ${
+                isActive
+                    ? 'bg-purple-600 text-white border-purple-600'
+                    : 'border-gray-300 hover:bg-gray-50'
+            }`;
+            button.textContent = i;
+            button.addEventListener('click', () => {
+                currentPage = i;
+                filterAndDisplayUsers();
+            });
+            pageNumbers.appendChild(button);
+        }
+    }
+
+    // Toggle user status
+    async function toggleUserStatus(userId, activate) {
+        try {
+            const csrfToken = await window.AppUtils.ensureCsrfToken();
+            const headers = { 'Content-Type': 'application/json' };
+            if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+
+            const endpoint = activate ? 'activate' : 'deactivate';
+            const response = await fetch(`/api/admin/users/${userId}/${endpoint}`, {
+                method: 'PUT',
+                headers: headers,
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                window.AppUtils.showToast(`User ${activate ? 'activated' : 'deactivated'} successfully`, 'success');
+                await fetchUsers();
+                await fetchUserStats();
+            } else {
+                throw new Error('Failed to update user status');
+            }
+        } catch (error) {
+            console.error('Error toggling user status:', error);
+            window.AppUtils.showToast('Failed to update user status', 'error');
+        }
+    }
+
+    // Make toggleUserStatus globally accessible
+    window.toggleUserStatus = toggleUserStatus;
+
+    // Search input handler
+    document.getElementById('search-input').addEventListener('input', function(e) {
+        currentSearch = e.target.value.trim();
+        currentPage = 1;
+        filterAndDisplayUsers();
+    });
+
+    // Role filter handler
+    document.getElementById('role-filter').addEventListener('change', function(e) {
+        roleFilter = e.target.value;
+        currentPage = 1;
+        filterAndDisplayUsers();
+    });
+
+    // Status filter handler
+    document.getElementById('status-filter').addEventListener('change', function(e) {
+        statusFilter = e.target.value;
+        currentPage = 1;
+        filterAndDisplayUsers();
+    });
+
+    // Pagination buttons
+    document.getElementById('prev-btn').addEventListener('click', function() {
+        if (currentPage > 1) {
+            currentPage--;
+            filterAndDisplayUsers();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    });
+
+    document.getElementById('next-btn').addEventListener('click', function() {
+        const totalPages = Math.ceil(totalUsers / itemsPerPage);
+        if (currentPage < totalPages) {
+            currentPage++;
+            filterAndDisplayUsers();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    });
+
+    // Initialize
+    fetchUserStats();
+    fetchUsers();
+</script>
+{% endblock %}

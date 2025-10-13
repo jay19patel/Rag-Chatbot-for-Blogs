@@ -90,6 +90,20 @@ async def root():
 # Initialize templates for 404 handler
 templates = Jinja2Templates(directory="app/templates")
 
+# Global 401 handler (Unauthorized)
+@app.exception_handler(401)
+async def unauthorized_handler(request: Request, exc):
+    """Handle 401 errors by showing custom unauthorized page"""
+    return templates.TemplateResponse(
+        "unauthorized.html",
+        {
+            "request": request,
+            "settings": settings,
+            "user": None
+        },
+        status_code=401
+    )
+
 # Global 404 handler
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc):
