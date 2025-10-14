@@ -1,13 +1,9 @@
 from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 import logging
 
 from app.database import create_db_and_tables
 from app.routes.api import router as api_router
-from app.routes.ui import router as ui_router
 from app.utility.middleware import setup_middleware, limiter
 from app.config import settings
 # Import models to ensure they are registered with SQLModel
@@ -56,12 +52,8 @@ app = FastAPI(
 # Setup middleware
 setup_middleware(app)
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
 # Include routers
 app.include_router(api_router)
-app.include_router(ui_router)
 
 
 # Health check endpoint with rate limiting
@@ -77,7 +69,7 @@ async def health_check(request: Request):
 
 
 # Root endpoint
-@app.get("/api")
+@app.get("/")
 async def root():
     """API root endpoint"""
     return {
@@ -85,53 +77,6 @@ async def root():
         "docs": "/docs",
         "health": "/health"
     }
-
-
-# Initialize templates for 404 handler
-templates = Jinja2Templates(directory="app/templates")
-
-# Global 401 handler (Unauthorized)
-@app.exception_handler(401)
-async def unauthorized_handler(request: Request, exc):
-    """Handle 401 errors by showing custom unauthorized page"""
-    return templates.TemplateResponse(
-        "unauthorized.html",
-        {
-            "request": request,
-            "settings": settings,
-            "user": None
-        },
-        status_code=401
-    )
-
-# Global 404 handler
-@app.exception_handler(404)
-async def not_found_handler(request: Request, exc):
-    """Handle 404 errors by showing custom 404 page"""
-    return templates.TemplateResponse(
-        "404.html",
-        {
-            "request": request,
-            "settings": settings,
-            "user": None
-        },
-        status_code=404
-    )
-
-
-# Global 500 handler
-@app.exception_handler(500)
-async def server_error_handler(request: Request, exc):
-    """Handle 500 errors by showing custom 500 page"""
-    return templates.TemplateResponse(
-        "500.html",
-        {
-            "request": request,
-            "settings": settings,
-            "user": None
-        },
-        status_code=500
-    )
 
 
 if __name__ == "__main__":

@@ -307,12 +307,8 @@ async def google_callback(
         # Update last login
         user_repo.update_last_login(user.id)
 
-        # Create redirect response
-        from fastapi.responses import RedirectResponse
-        redirect_response = RedirectResponse(url="/profile", status_code=302)
-
         # Set session cookie
-        redirect_response.set_cookie(
+        response.set_cookie(
             key="session_token",
             value=session_token,
             httponly=True,
@@ -320,10 +316,10 @@ async def google_callback(
             samesite="lax",
             max_age=settings.access_token_expire_minutes * 60
         )
-        
+
         # Generate and set CSRF token
         raw_token, signed_token = generate_csrf_token()
-        redirect_response.set_cookie(
+        response.set_cookie(
             key="csrf_token",
             value=raw_token,
             httponly=False,  # Allow JavaScript to access it if needed
@@ -332,7 +328,7 @@ async def google_callback(
             max_age=3600  # 1 hour
         )
 
-        return redirect_response
+        return Token(access_token=access_token, csrf_token=signed_token)
 
     except Exception as e:
         raise HTTPException(
