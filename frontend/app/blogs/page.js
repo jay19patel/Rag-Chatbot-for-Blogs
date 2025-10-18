@@ -4,84 +4,24 @@ import { useState } from "react";
 import BlogCard from "@/components/BlogCard";
 import Breadcrumb from "@/components/Breadcrumb";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import blogsData from "@/data/blogs.json";
+import Link from "next/link";
 
-// Dummy blogs data (9 per page for pagination)
-const allBlogs = [
-  {
-    slug: "getting-started-with-nextjs",
-    title: "Getting Started with Next.js 15: A Comprehensive Guide",
-    description: "Learn how to build modern web applications with Next.js 15. Explore the latest features, routing, and best practices.",
-    image: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=800&h=400&fit=crop",
-    category: "Technology",
-    date: "Jan 15, 2025",
-  },
-  {
-    slug: "travel-guide-to-japan",
-    title: "The Ultimate Travel Guide to Japan in 2025",
-    description: "Discover the best places to visit, authentic cuisine to try, and cultural experiences you shouldn't miss in Japan.",
-    image: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=800&h=400&fit=crop",
-    category: "Travel",
-    date: "Jan 12, 2025",
-  },
-  {
-    slug: "minimalist-lifestyle-tips",
-    title: "10 Simple Tips for Embracing a Minimalist Lifestyle",
-    description: "Transform your life with minimalism. Learn practical tips to declutter your space and mind for a more peaceful living.",
-    image: "https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?w=800&h=400&fit=crop",
-    category: "Lifestyle",
-    date: "Jan 10, 2025",
-  },
-  {
-    slug: "react-best-practices",
-    title: "React Best Practices Every Developer Should Know",
-    description: "Improve your React development skills with these essential best practices, patterns, and performance optimization techniques.",
-    image: "https://images.unsplash.com/photo-1633356122102-3fe601e05bd2?w=800&h=400&fit=crop",
-    category: "Technology",
-    date: "Jan 8, 2025",
-  },
-  {
-    slug: "healthy-eating-habits",
-    title: "Building Healthy Eating Habits That Last",
-    description: "Discover sustainable approaches to nutrition and develop eating habits that support your long-term health and wellness goals.",
-    image: "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800&h=400&fit=crop",
-    category: "Lifestyle",
-    date: "Jan 6, 2025",
-  },
-  {
-    slug: "web-design-trends-2025",
-    title: "Top Web Design Trends to Watch in 2025",
-    description: "Stay ahead of the curve with these cutting-edge web design trends that are shaping the digital landscape this year.",
-    image: "https://images.unsplash.com/photo-1558655146-364adaf1fcc9?w=800&h=400&fit=crop",
-    category: "Technology",
-    date: "Jan 4, 2025",
-  },
-  {
-    slug: "budget-travel-europe",
-    title: "How to Travel Europe on a Budget: The Complete Guide",
-    description: "Explore Europe without breaking the bank. Money-saving tips, budget accommodation, and free attractions across the continent.",
-    image: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=800&h=400&fit=crop",
-    category: "Travel",
-    date: "Jan 2, 2025",
-  },
-  {
-    slug: "morning-routine-productivity",
-    title: "The Perfect Morning Routine for Maximum Productivity",
-    description: "Transform your mornings and boost your productivity with these science-backed morning routine strategies and habits.",
-    image: "https://images.unsplash.com/photo-1495364141860-b0d03eccd065?w=800&h=400&fit=crop",
-    category: "Lifestyle",
-    date: "Dec 30, 2024",
-  },
-  {
-    slug: "typescript-advanced-tips",
-    title: "Advanced TypeScript Tips for Professional Developers",
-    description: "Level up your TypeScript skills with advanced techniques, type utilities, and patterns used by professional developers.",
-    image: "https://images.unsplash.com/photo-1516116216624-53e697fedbea?w=800&h=400&fit=crop",
-    category: "Technology",
-    date: "Dec 28, 2024",
-  },
-];
+// Transform blog data
+const allBlogs = blogsData.blogs.map(blog => ({
+  slug: blog.slug,
+  title: blog.title,
+  description: blog.excerpt,
+  image: blog.image,
+  category: blog.category,
+  date: new Date(blog.publishedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+  featured: blog.featured || false,
+}));
 
-const categories = ["All", "Technology", "Travel", "Lifestyle"];
+// Sort by date (newest first)
+allBlogs.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+const categories = ["All", ...new Set(allBlogs.map(blog => blog.category))];
 const BLOGS_PER_PAGE = 9;
 
 export default function BlogsPage() {
@@ -121,6 +61,13 @@ export default function BlogsPage() {
     { label: "Blogs", href: null },
   ];
 
+  // Get the latest 3 blogs for featured section
+  const latestBlogs = filteredBlogs.slice(0, 3);
+  const [latestBlog, ...otherLatestBlogs] = latestBlogs;
+
+  // Get remaining blogs for grid
+  const remainingBlogs = currentBlogs.slice(3);
+
   return (
     <div className="py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -128,7 +75,7 @@ export default function BlogsPage() {
         <Breadcrumb items={breadcrumbItems} />
 
         {/* Page Header */}
-        <div className="mb-8">
+        <div className="mb-12">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
             Explore Our Blogs
           </h1>
@@ -138,7 +85,7 @@ export default function BlogsPage() {
         </div>
 
         {/* Search and Filter */}
-        <div className="mb-8 space-y-4">
+        <div className="mb-12 space-y-4">
           {/* Search Bar */}
           <div className="relative">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -147,7 +94,7 @@ export default function BlogsPage() {
               placeholder="Search blogs by title or content..."
               value={searchQuery}
               onChange={handleSearchChange}
-              className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:border-transparent"
+              className="w-full pl-12 pr-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
           </div>
 
@@ -157,10 +104,10 @@ export default function BlogsPage() {
               <button
                 key={category}
                 onClick={() => handleCategoryChange(category)}
-                className={`px-5 py-2 rounded-lg font-medium transition-colors ${
+                className={`px-5 py-2 rounded-lg font-medium transition-all duration-300 ${
                   selectedCategory === category
-                    ? "bg-indigo-600 text-white"
-                    : "bg-white text-gray-700 border border-gray-300 hover:border-indigo-600 hover:text-indigo-600"
+                    ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-500/30"
+                    : "bg-white text-gray-700 border border-gray-300 hover:border-indigo-500 hover:text-indigo-600"
                 }`}
               >
                 {category}
@@ -170,18 +117,88 @@ export default function BlogsPage() {
         </div>
 
         {/* Results Count */}
-        <div className="mb-6">
+        <div className="mb-8">
           <p className="text-gray-600">
             Showing {currentBlogs.length} of {filteredBlogs.length} blog
             {filteredBlogs.length !== 1 ? "s" : ""}
           </p>
         </div>
 
-        {/* Blog Grid */}
+        {/* Featured Latest Blogs Section */}
+        {currentPage === 1 && latestBlogs.length > 0 && (
+          <div className="mb-16">
+            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6">Latest Articles</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Large Featured Blog */}
+              {latestBlog && (
+                <Link href={`/blogs/${latestBlog.slug}`} className="lg:col-span-2 group">
+                  <div className="relative h-full bg-white border border-gray-300 rounded-xl overflow-hidden hover:border-indigo-500 hover:shadow-lg transition-all duration-300">
+                    <div className="aspect-[16/9] relative overflow-hidden">
+                      <img
+                        src={latestBlog.image}
+                        alt={latestBlog.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+                    </div>
+                    <div className="p-6">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="px-3 py-1 bg-indigo-100 text-indigo-600 text-xs font-semibold rounded-full">
+                          {latestBlog.category}
+                        </span>
+                        <span className="text-gray-500 text-sm">{latestBlog.date}</span>
+                      </div>
+                      <h3 className="text-2xl font-bold text-gray-900 mb-3 group-hover:text-indigo-600 transition-colors">
+                        {latestBlog.title}
+                      </h3>
+                      <p className="text-gray-600 line-clamp-2">
+                        {latestBlog.description}
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+              )}
+
+              {/* Two Smaller Blogs */}
+              <div className="space-y-6">
+                {otherLatestBlogs.map((blog) => (
+                  <Link href={`/blogs/${blog.slug}`} key={blog.slug} className="group block">
+                    <div className="bg-white border border-gray-300 rounded-xl overflow-hidden hover:border-indigo-500 hover:shadow-lg transition-all duration-300">
+                      <div className="aspect-[16/9] relative overflow-hidden">
+                        <img
+                          src={blog.image}
+                          alt={blog.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                      </div>
+                      <div className="p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="px-2 py-1 bg-violet-100 text-violet-600 text-xs font-semibold rounded-full">
+                            {blog.category}
+                          </span>
+                          <span className="text-gray-500 text-xs">{blog.date}</span>
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-indigo-600 transition-colors line-clamp-2">
+                          {blog.title}
+                        </h3>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* All Blogs Grid */}
         {currentBlogs.length > 0 ? (
           <>
+            {currentPage === 1 && remainingBlogs.length > 0 && (
+              <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-6">All Articles</h2>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-              {currentBlogs.map((blog) => (
+              {(currentPage === 1 ? remainingBlogs : currentBlogs).map((blog) => (
                 <BlogCard key={blog.slug} blog={blog} />
               ))}
             </div>
@@ -192,7 +209,7 @@ export default function BlogsPage() {
                 <button
                   onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                 >
                   <ChevronLeft className="w-5 h-5" />
                   Previous
@@ -205,10 +222,10 @@ export default function BlogsPage() {
                       <button
                         key={page}
                         onClick={() => setCurrentPage(page)}
-                        className={`w-10 h-10 rounded-lg font-medium transition-colors ${
+                        className={`w-10 h-10 rounded-lg font-medium transition-all duration-300 ${
                           currentPage === page
-                            ? "bg-indigo-600 text-white"
-                            : "bg-white text-gray-700 border border-gray-300 hover:border-indigo-600 hover:text-indigo-600"
+                            ? "bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-lg shadow-indigo-500/30"
+                            : "bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 hover:border-indigo-500"
                         }`}
                       >
                         {page}
@@ -222,7 +239,7 @@ export default function BlogsPage() {
                     setCurrentPage((prev) => Math.min(prev + 1, totalPages))
                   }
                   disabled={currentPage === totalPages}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
                 >
                   Next
                   <ChevronRight className="w-5 h-5" />

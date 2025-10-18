@@ -4,16 +4,16 @@ import { Calendar, Tag } from "lucide-react";
 export default function BlogCard({ blog }) {
   return (
     <Link href={`/blogs/${blog.slug}`}>
-      <div className="group bg-white rounded-xl border border-gray-200 overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-indigo-200">
+      <div className="group bg-white rounded-xl border border-gray-300 overflow-hidden transition-all duration-300 hover:border-indigo-500 hover:shadow-lg">
         {/* Image */}
-        <div className="relative h-48 overflow-hidden bg-gray-100">
+        <div className="relative aspect-[16/9] overflow-hidden bg-gray-100">
           <img
             src={blog.image}
             alt={blog.title}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
           <div className="absolute top-4 left-4">
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white text-indigo-600 shadow-sm">
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white text-indigo-600 shadow-sm">
               {blog.category}
             </span>
           </div>
@@ -33,10 +33,6 @@ export default function BlogCard({ blog }) {
             <div className="flex items-center gap-1">
               <Calendar className="w-4 h-4" />
               <span>{blog.date}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <Tag className="w-4 h-4" />
-              <span>{blog.category}</span>
             </div>
           </div>
         </div>
