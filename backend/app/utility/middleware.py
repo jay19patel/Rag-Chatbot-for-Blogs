@@ -7,7 +7,6 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from typing import Callable
 import time
 import logging
@@ -23,52 +22,6 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 limiter = Limiter(key_func=get_remote_address)
-
-
-# ============================================================================
-# CSRF Protection Middleware
-# ============================================================================
-
-class CSRFProtectionMiddleware(BaseHTTPMiddleware):
-    """
-    CSRF Protection Middleware for state-changing operations.
-    Protects POST, PUT, DELETE, PATCH requests.
-    """
-
-    def __init__(self, app, secret_key: str):
-        super().__init__(app)
-        self.serializer = URLSafeTimedSerializer(secret_key)
-        self.csrf_cookie_name = "csrf_token"
-        self.csrf_header_name = "X-CSRF-Token"
-        self.csrf_token_age = 3600  # 1 hour
-
-    async def dispatch(self, request: Request, call_next: Callable):
-        # Apply CSRF protection only on unsafe methods
-        if request.method in ("POST", "PUT", "DELETE", "PATCH"):
-            csrf_cookie = request.cookies.get(self.csrf_cookie_name)
-            csrf_header = request.headers.get(self.csrf_header_name)
-
-            if not csrf_cookie or not csrf_header:
-                return JSONResponse(
-                    status_code=403,
-                    content={"detail": "CSRF token missing"}
-                )
-
-            try:
-                token_data = self.serializer.loads(csrf_header, max_age=self.csrf_token_age)
-                if token_data != csrf_cookie:
-                    return JSONResponse(
-                        status_code=403,
-                        content={"detail": "Invalid CSRF token"}
-                    )
-            except (BadSignature, SignatureExpired):
-                return JSONResponse(
-                    status_code=403,
-                    content={"detail": "Invalid or expired CSRF token"}
-                )
-
-        response = await call_next(request)
-        return response
 
 
 # ============================================================================
@@ -129,11 +82,16 @@ def setup_cors(app):
     """Setup CORS middleware"""
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
+        allow_origins=[
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:8000",
+            "http://127.0.0.1:8000"
+        ],
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
         allow_headers=["*"],
-        expose_headers=["X-Process-Time", "X-CSRF-Token"],
+        expose_headers=["X-Process-Time"],
     )
 
 
@@ -158,10 +116,7 @@ def setup_middleware(app):
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(SlowAPIMiddleware)
 
-    # CSRF Protection (add last so it runs first in the chain)
-    app.add_middleware(CSRFProtectionMiddleware, secret_key=settings.csrf_secret_key)
-
-    # Session Middleware (required for OAuth) - add last so it runs first
+    # Session Middleware (required for OAuth)
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.session_secret_key,

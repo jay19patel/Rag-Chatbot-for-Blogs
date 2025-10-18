@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config
-from itsdangerous import URLSafeTimedSerializer
 
 from app.database import get_session
 from app.models_schema import (
@@ -37,9 +36,6 @@ oauth.register(
     client_kwargs={'scope': 'openid email profile'}
 )
 
-# CSRF token serializer
-csrf_serializer = URLSafeTimedSerializer(settings.csrf_secret_key)
-
 
 # ============================================================================
 # Repository Dependencies
@@ -53,37 +49,6 @@ def get_user_repository(db: Session = Depends(get_session)) -> UserRepository:
 def get_session_repository(db: Session = Depends(get_session)) -> SessionRepository:
     """Get SessionRepository instance"""
     return SessionRepository(db)
-
-
-def generate_csrf_token() -> tuple[str, str]:
-    """Generate a new CSRF token pair (raw_token, signed_token)"""
-    import secrets
-    raw_token = secrets.token_hex(16)
-    signed_token = csrf_serializer.dumps(raw_token)
-    return raw_token, signed_token
-
-
-# ============================================================================
-# CSRF Token Endpoint
-# ============================================================================
-
-@router.get("/auth/csrf-token")
-async def get_csrf_token(response: Response):
-    """Get a CSRF token for authentication"""
-    raw_token, signed_token = generate_csrf_token()
-    
-    # Set raw token in cookie
-    response.set_cookie(
-        key="csrf_token",
-        value=raw_token,
-        httponly=False,  # Allow JavaScript to access it if needed
-        secure=False,  # Set to True in production with HTTPS
-        samesite="strict",
-        max_age=3600  # 1 hour
-    )
-    
-    # Return signed token to be used in headers
-    return {"csrf_token": signed_token}
 
 
 # ============================================================================
@@ -164,7 +129,7 @@ async def login(
 
     # Create session
     session_token = generate_session_token()
-    expires_at = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
+    expires_at = datetime.now() + timedelta(minutes=settings.access_token_expire_minutes)
 
     session_repo.create_session(
         user_id=user.id,
@@ -186,19 +151,8 @@ async def login(
         samesite="lax",
         max_age=settings.access_token_expire_minutes * 60
     )
-    
-    # Generate and set CSRF token
-    raw_token, signed_token = generate_csrf_token()
-    response.set_cookie(
-        key="csrf_token",
-        value=raw_token,
-        httponly=False,  # Allow JavaScript to access it if needed
-        secure=False,  # Set to True in production with HTTPS
-        samesite="strict",
-        max_age=3600  # 1 hour
-    )
 
-    return Token(access_token=access_token, csrf_token=signed_token)
+    return Token(access_token=access_token)
 
 
 @router.post("/auth/logout", response_model=MessageResponse)
@@ -214,9 +168,6 @@ async def logout(
 
     # Clear session cookie
     response.delete_cookie("session_token")
-    
-    # Clear CSRF token cookie
-    response.delete_cookie("csrf_token")
 
     return MessageResponse(message="Logged out successfully")
 
@@ -241,14 +192,14 @@ async def google_callback(
 ):
     """Handle Google OAuth callback"""
     try:
+        from starlette.responses import RedirectResponse
+
         token = await oauth.google.authorize_access_token(request)
         user_info = token.get('userinfo')
 
         if not user_info:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to get user info from Google"
-            )
+            # Redirect to frontend with error
+            return RedirectResponse(url="http://localhost:3000/login?error=Failed to get user info")
 
         email = user_info.get('email')
         google_id = user_info.get('sub')
@@ -294,7 +245,7 @@ async def google_callback(
 
         # Create session
         session_token = generate_session_token()
-        expires_at = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
+        expires_at = datetime.now() + timedelta(minutes=settings.access_token_expire_minutes)
 
         session_repo.create_session(
             user_id=user.id,
@@ -317,24 +268,12 @@ async def google_callback(
             max_age=settings.access_token_expire_minutes * 60
         )
 
-        # Generate and set CSRF token
-        raw_token, signed_token = generate_csrf_token()
-        response.set_cookie(
-            key="csrf_token",
-            value=raw_token,
-            httponly=False,  # Allow JavaScript to access it if needed
-            secure=False,  # Set to True in production with HTTPS
-            samesite="strict",
-            max_age=3600  # 1 hour
-        )
-
-        return Token(access_token=access_token, csrf_token=signed_token)
+        # Redirect to frontend callback with token
+        return RedirectResponse(url=f"http://localhost:3000/auth/callback?token={access_token}")
 
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"OAuth authentication failed: {str(e)}"
-        )
+        # Redirect to frontend with error
+        return RedirectResponse(url=f"http://localhost:3000/login?error={str(e)}")
 
 
 # ============================================================================
@@ -368,7 +307,7 @@ async def update_user_profile(
     if user_update.full_name is not None:
         current_user.full_name = user_update.full_name
 
-    current_user.updated_at = datetime.utcnow()
+    current_user.updated_at = datetime.now()
 
     return user_repo.update(current_user)
 
@@ -689,7 +628,7 @@ async def search_users(
 @router.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 
 # ============================================================================

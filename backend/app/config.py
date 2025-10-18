@@ -20,7 +20,6 @@ class Settings(BaseSettings):
     google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
 
     # Security
-    csrf_secret_key: str
     session_secret_key: str
 
     # Rate Limiting

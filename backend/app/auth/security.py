@@ -32,10 +32,14 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     """Create a JWT access token"""
     to_encode = data.copy()
 
+    # Convert sub to string if it's an integer (required by python-jose)
+    if "sub" in to_encode and isinstance(to_encode["sub"], int):
+        to_encode["sub"] = str(to_encode["sub"])
+
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
+        expire = datetime.now() + timedelta(minutes=settings.access_token_expire_minutes)
 
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
@@ -46,24 +50,23 @@ def decode_access_token(token: str) -> Optional[TokenData]:
     """Decode and verify a JWT access token"""
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        user_id: int = payload.get("sub")
+        user_id_str: str = payload.get("sub")
         email: str = payload.get("email")
         role: str = payload.get("role")
 
-        if user_id is None or email is None:
+        if user_id_str is None or email is None:
             return None
 
+        # Convert string user_id back to int
+        user_id = int(user_id_str)
+
         return TokenData(user_id=user_id, email=email, role=role)
-    except JWTError:
+    except (JWTError, ValueError) as e:
+        print(f"JWT Error: {e}")  # Debug
         return None
 
 
 def generate_session_token() -> str:
     """Generate a secure random session token"""
-    return secrets.token_urlsafe(32)
-
-
-def generate_csrf_token() -> str:
-    """Generate a CSRF token"""
     return secrets.token_urlsafe(32)
 

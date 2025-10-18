@@ -40,7 +40,7 @@ async def get_current_user(
     if not user and session_token:
         statement = select(UserSession).where(
             UserSession.session_token == session_token,
-            UserSession.expires_at > datetime.utcnow()
+            UserSession.expires_at > datetime.now()
         )
         user_session = db.exec(statement).first()
         if user_session:
@@ -103,7 +103,7 @@ async def get_optional_user(
         if not user and session_token:
             statement = select(UserSession).where(
                 UserSession.session_token == session_token,
-                UserSession.expires_at > datetime.utcnow()
+                UserSession.expires_at > datetime.now()
             )
             user_session = db.exec(statement).first()
             if user_session:

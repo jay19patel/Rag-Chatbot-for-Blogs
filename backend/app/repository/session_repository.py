@@ -24,7 +24,7 @@ class SessionRepository(BaseRepository[UserSession]):
     
     def get_active_sessions(self, user_id: int) -> List[UserSession]:
         """Get active (non-expired) sessions for a user"""
-        now = datetime.utcnow()
+        now = datetime.now()
         statement = select(UserSession).where(
             (UserSession.user_id == user_id) & (UserSession.expires_at > now)
         )
@@ -32,7 +32,7 @@ class SessionRepository(BaseRepository[UserSession]):
     
     def get_expired_sessions(self, user_id: int) -> List[UserSession]:
         """Get expired sessions for a user"""
-        now = datetime.utcnow()
+        now = datetime.now()
         statement = select(UserSession).where(
             (UserSession.user_id == user_id) & (UserSession.expires_at <= now)
         )
@@ -74,7 +74,7 @@ class SessionRepository(BaseRepository[UserSession]):
     
     def delete_expired_sessions(self, user_id: Optional[int] = None) -> int:
         """Delete expired sessions for a user or all users"""
-        now = datetime.utcnow()
+        now = datetime.now()
         statement = select(UserSession).where(UserSession.expires_at <= now)
         
         if user_id:
@@ -107,7 +107,7 @@ class SessionRepository(BaseRepository[UserSession]):
     
     def get_active_sessions_count(self, user_id: int) -> int:
         """Get count of active sessions for a user"""
-        now = datetime.utcnow()
+        now = datetime.now()
         statement = select(UserSession).where(
             (UserSession.user_id == user_id) & (UserSession.expires_at > now)
         )
@@ -120,7 +120,7 @@ class SessionRepository(BaseRepository[UserSession]):
     
     def get_recent_sessions(self, user_id: int, hours: int = 24) -> List[UserSession]:
         """Get recent sessions within specified hours"""
-        since = datetime.utcnow() - timedelta(hours=hours)
+        since = datetime.now() - timedelta(hours=hours)
         statement = select(UserSession).where(
             (UserSession.user_id == user_id) & (UserSession.created_at >= since)
         ).order_by(UserSession.created_at.desc())
@@ -128,7 +128,7 @@ class SessionRepository(BaseRepository[UserSession]):
     
     def cleanup_old_sessions(self, days: int = 30) -> int:
         """Clean up sessions older than specified days"""
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now() - timedelta(days=days)
         statement = select(UserSession).where(UserSession.created_at < cutoff_date)
         old_sessions = list(self.session.exec(statement).all())
         
@@ -141,7 +141,7 @@ class SessionRepository(BaseRepository[UserSession]):
     
     def get_session_stats(self, user_id: Optional[int] = None) -> dict:
         """Get session statistics"""
-        now = datetime.utcnow()
+        now = datetime.now()
         
         # Total sessions
         total_statement = select(UserSession)

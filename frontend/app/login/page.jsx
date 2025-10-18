@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Mail, Lock, Eye, EyeOff, BookOpen, Users, Sparkles } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
@@ -10,11 +13,33 @@ export default function LoginPage() {
     email: "",
     password: "",
   });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
+  const router = useRouter();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Handle login logic here
-    console.log("Login:", formData);
+    setError("");
+    setLoading(true);
+
+    try {
+      const result = await login(formData.email, formData.password);
+
+      if (result.success) {
+        router.push("/");
+      } else {
+        setError(result.error || "Login failed. Please try again.");
+      }
+    } catch (err) {
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = () => {
+    window.location.href = api.getGoogleLoginUrl();
   };
 
   return (
@@ -87,6 +112,13 @@ export default function LoginPage() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+
             {/* Email */}
             <div>
               <label
@@ -166,9 +198,10 @@ export default function LoginPage() {
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition-colors font-semibold"
+              disabled={loading}
+              className="w-full bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Sign In
+              {loading ? "Signing In..." : "Sign In"}
             </button>
           </form>
 
@@ -183,7 +216,11 @@ export default function LoginPage() {
           </div>
 
           {/* Google Button */}
-          <button className="w-full bg-white text-gray-900 py-3 rounded-lg border-2 border-gray-300 hover:border-gray-400 transition-colors font-semibold flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            className="w-full bg-white text-gray-900 py-3 rounded-lg border-2 border-gray-300 hover:border-gray-400 transition-colors font-semibold flex items-center justify-center gap-3"
+          >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
                 fill="currentColor"

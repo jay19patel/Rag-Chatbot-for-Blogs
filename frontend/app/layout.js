@@ -6,6 +6,7 @@ import "swiper/css/pagination";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import GridBackground from "@/components/GridBackground";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,13 +29,15 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased flex flex-col min-h-screen`}
       >
-        <GridBackground>
-          <Navbar />
-          <main className="flex-1">
-            {children}
-          </main>
-          <Footer />
-        </GridBackground>
+        <AuthProvider>
+          <GridBackground>
+            <Navbar />
+            <main className="flex-1">
+              {children}
+            </main>
+            <Footer />
+          </GridBackground>
+        </AuthProvider>
       </body>
     </html>
   );

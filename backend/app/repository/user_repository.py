@@ -62,7 +62,7 @@ class UserRepository(BaseRepository[User]):
         """Update user's last login time"""
         user = self.get_by_id(user_id)
         if user:
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now()
             return self.update(user)
         return None
     
@@ -71,7 +71,7 @@ class UserRepository(BaseRepository[User]):
         user = self.get_by_id(user_id)
         if user:
             user.is_active = False
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now()
             return self.update(user)
         return None
     
@@ -80,7 +80,7 @@ class UserRepository(BaseRepository[User]):
         user = self.get_by_id(user_id)
         if user:
             user.is_active = True
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now()
             return self.update(user)
         return None
     
@@ -89,7 +89,7 @@ class UserRepository(BaseRepository[User]):
         user = self.get_by_id(user_id)
         if user:
             user.role = new_role
-            user.updated_at = datetime.utcnow()
+            user.updated_at = datetime.now()
             return self.update(user)
         return None
     
