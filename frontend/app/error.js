@@ -23,10 +23,10 @@ export default function Error({ error, reset }) {
             Something Went Wrong
           </h2>
           <p className="text-lg text-gray-600 mb-2">
-            We're sorry, but something unexpected happened.
+            We&apos;re sorry, but something unexpected happened.
           </p>
           <p className="text-gray-500">
-            Don't worry, our team has been notified and we're working on it.
+            Don&apos;t worry, our team has been notified and we&apos;re working on it.
           </p>
         </div>
 

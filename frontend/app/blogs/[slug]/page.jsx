@@ -389,7 +389,7 @@ export default function BlogDetailPage() {
         {tableOfContents.length > 0 && (
           <button
             onClick={() => setShowTOC(true)}
-            className="fixed bottom-6 left-6 z-40 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white px-4 py-3 rounded-full shadow-lg shadow-indigo-500/30 transition-all duration-300 flex items-center gap-2"
+            className="fixed bottom-6 left-6 z-40 bg-white border border-gray-300 hover:border-indigo-500 hover:text-indigo-600 text-gray-700 px-5 py-2 rounded-lg font-medium transition-all duration-300 flex items-center gap-2 shadow-sm"
           >
             <Menu className="w-5 h-5" />
             <span className="hidden md:inline">Table of Contents</span>
@@ -406,7 +406,7 @@ export default function BlogDetailPage() {
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                    <Menu className="w-6 h-6 text-indigo-500" />
+                    <Menu className="w-6 h-6 text-white" />
                     Table of Contents
                   </h3>
                   <button
